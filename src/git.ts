@@ -40,7 +40,11 @@ export type Git = {
 export function gitIn(cwd: string): Git {
   function run(args: string[], timeout = 30_000) {
     const r = spawnSync("git", args, { cwd, encoding: "utf8", timeout });
-    return { status: r.status, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() };
+    // Sólo se recorta el final. `git status --porcelain` empieza con un espacio
+    // cuando el cambio no está en el stage (" M CHANGELOG.md"), y recortar el
+    // principio corría la primera línea un carácter: el archivo se leía como
+    // "HANGELOG.md" y un changelog con notas se tomaba por un cambio prohibido.
+    return { status: r.status, out: (r.stdout ?? "").trimEnd(), err: (r.stderr ?? "").trim() };
   }
 
   function must(args: string[]) {

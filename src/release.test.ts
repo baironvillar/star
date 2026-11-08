@@ -242,6 +242,23 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
     expect(git(origin, "branch", "--list", "release/*")).toBe("");
   });
 
+  it("las notas recién escritas en el CHANGELOG viajan en el commit de la versión", async () => {
+    const { work } = repo();
+    // Sin commitear, y como único cambio: es la primera línea de `git status`.
+    writeFileSync(join(work, "CHANGELOG.md"), "# Changelog\n\n## [0.2.0]\n\n- Recién escrito.\n");
+
+    await prepareRelease(
+      deps(work, () => null, []),
+      "minor",
+    );
+
+    expect(git(work, "status", "--porcelain")).toBe("");
+    expect(git(work, "show", "--format=", "--name-only", "HEAD").split("\n").sort()).toEqual([
+      "CHANGELOG.md",
+      "package.json",
+    ]);
+  });
+
   it("finish frena si el CI del PR todavía corre", async () => {
     const { work } = repo();
     await prepareRelease(
