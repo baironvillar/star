@@ -5,8 +5,9 @@ que el anterior esté en uso.
 
 ## Fase 1: núcleo, consumido por flotas
 
-0. **Decisiones pendientes** de [`docs/alcance.md`](docs/alcance.md), y
-   comprobar que `vp run` le entrega un TTY a una tarea.
+0. **Decisiones pendientes** de [`docs/alcance.md`](docs/alcance.md). Ya
+   comprobado: `vp run` le entrega un TTY a una tarea sin caché (ver
+   [`docs/arquitectura.md`](docs/arquitectura.md#el-comando-release)).
 1. **Versiones.** Repo con Vite+ y Bun, adaptadores de manifiestos y
    `star version get|bump|set|tag` y `star notes`, con tests. flotas
    reemplaza su `scripts/version.ts`.

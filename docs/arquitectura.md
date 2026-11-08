@@ -70,8 +70,14 @@ vp run release minor
 3. Muestra el cambio y pregunta. Sin terminal no adivina: exige `--yes`.
 4. Escribe la versión, crea el commit `x.y.z` y el tag `vx.y.z`, y empuja.
 
-Hay que verificar que `vp run` le entregue un TTY a la tarea; si no, la pregunta
-no funciona y hay que buscar otra forma.
+**La tarea `release` tiene que ser `cache: false`.** Probado con Vite+ 1.5.0 en
+Windows: una tarea cacheada corre sin TTY (`stdin.isTTY` y `stdout.isTTY` son
+`false`) y `prompt()` devuelve `null` al instante, así que la pregunta del paso
+3 se leería como "no hay nadie para contestar". Con `cache: false` la tarea
+recibe la terminal real, aunque dependa de una tarea cacheada: `verify` se
+reproduce desde la caché ("cache hit, replaying") y `release` igual puede
+preguntar. Los argumentos que siguen al nombre (`minor`) llegan al comando.
+`doctor` revisa que la tarea `release` de la app no tenga caché.
 
 ### Workflows reutilizables
 
