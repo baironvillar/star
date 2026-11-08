@@ -1,0 +1,3 @@
+# Se guarda todo como LF. El proyecto se escribe en Windows, y los hooks son
+# scripts sh: un CRLF en la primera línea hace que ni arranquen.
+* text=auto eol=lf
