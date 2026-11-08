@@ -1,0 +1,23 @@
+# Changelog
+
+Los cambios que nota quien usa star en su app. El formato sigue
+[Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones
+siguen [SemVer](https://semver.org/lang/es/).
+
+## [Sin publicar]
+
+### Agregado
+
+- `star version`: muestra la versión de cada manifiesto y falla si alguno
+  discrepa. Detecta solo el `package.json` raíz, los workspaces, y en una app de
+  escritorio `tauri.conf.json`, `Cargo.toml` y `Cargo.lock`.
+- `star version bump [patch|minor|major]`: sube la versión en todos los
+  manifiestos, cambiando sólo el número. Antes revisa que coincidan, que la rama
+  sea `release/<versión>`, que el tag esté libre (también en `origin`) y que
+  `CHANGELOG.md` tenga las notas, y pregunta.
+- `star version set <x.y.z>`: fija una versión, para reparar manifiestos que
+  se desincronizaron.
+- `star version tag <tag>`: falla si el tag no coincide con la versión. Es para
+  la CI.
+- `star notes [versión]`: imprime las notas de una versión desde
+  `CHANGELOG.md`.
