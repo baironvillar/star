@@ -6,6 +6,8 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.1.0] - 2026-11-08
+
 ### Agregado
 
 - `star version`: muestra la versión de cada manifiesto y falla si alguno
