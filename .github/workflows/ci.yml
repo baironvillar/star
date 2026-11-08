@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check and test (${{ matrix.os }})
+    # Windows además de Linux: las apps se escriben en Windows, y los
+    # manifiestos llegan con CRLF y BOM. El kit tiene que leerlos igual.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      # Formato, lint y tipos en una sola pasada (Oxfmt, Oxlint y tsgolint).
+      - run: bunx vp check
+
+      - run: bunx vp test run
+
+      # El CLI se usa a sí mismo: los manifiestos del kit tienen que coincidir.
+      - run: bun src/cli.ts version

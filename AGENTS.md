@@ -3,7 +3,8 @@
 Contexto para cualquier agente que toque este repositorio.
 
 star es un kit de releases para apps con Vite (SaaS web y escritorio con
-Tauri 2). **Está en diseño: todavía no hay código.** Antes de cambiar algo, lee
+Tauri 2). **En desarrollo:** ya está el núcleo de versiones (paso 1 del
+[`ROADMAP.md`](ROADMAP.md)); el resto sigue en diseño. Antes de cambiar algo, lee
 [`docs/alcance.md`](docs/alcance.md) (qué entra y qué no) y
 [`docs/decisiones.md`](docs/decisiones.md) (lo ya decidido).
 
@@ -27,3 +28,23 @@ Tauri 2). **Está en diseño: todavía no hay código.** Antes de cambiar algo, 
 Bun es el gestor y el runtime; Vite+ (`vp`) es el toolchain (`vp check` con
 Oxc, `vp test`). Vite+ cambia rápido: revisa la documentación de la versión
 instalada (`node_modules/vite-plus/docs`) antes de diseñar sobre ella.
+
+## Comandos
+
+```bash
+bun install             # nunca npm ni `vp install`
+bun run check           # vp check: formato, lint y tipos. La puerta de cada cambio
+bun run test            # vp test run
+bun run star -- version # el CLI desde el código
+```
+
+## Mapa
+
+```
+src/cli.ts              comandos y salida; nada de lógica que no se pueda probar aparte
+src/version.ts          leer todos los manifiestos, planificar y aplicar la escritura
+src/readiness.ts        los chequeos antes de un bump (git es una interfaz, se prueba con un doble)
+src/manifests/          un adaptador por formato, sobre texto: read y write sin tocar el disco
+src/changelog.ts        la sección de una versión, escrita una sola vez
+src/json-text.ts        ubicar una clave de primer nivel en un JSON sin reformatearlo
+```
