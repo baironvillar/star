@@ -119,5 +119,9 @@ bun add -d github:baironvillar/star#v0.1.0
 - **Bun ejecuta el TypeScript directo**, así que una dependencia git funciona sin
   paso de build. `vp pack` entra cuando se publique en npm y el CLI tenga que
   correr también con Node.
+- **Los scripts y las tareas llaman a `bunx star`, no a `star`.** En Windows, el
+  shim que Bun crea para un bin con shebang `bun` busca `bun.exe` en el PATH, y
+  falla donde Bun se instaló con npm (que deja un `bun.cmd`). `bunx` funciona en
+  los dos casos. Pasó al adoptarlo en flotas.
 - La configuración, si hace falta, va en la clave `"star"` del `package.json`
   de la app. No en `vite.config.ts`: Vite+ valida sus propias claves.
