@@ -7,16 +7,22 @@
  *   star version set <x.y.z>        fija una versión (para reparar manifiestos)
  *   star version tag <tag>          falla si el tag no coincide con la versión (CI)
  *   star notes [versión]            la sección del CHANGELOG de esa versión
+ *   star release [nivel]            prepara una versión: rama, bump, commit, push y PR
+ *   star release finish [versión]   la mergea con el asunto exacto y empuja el tag
  *
  * `--yes` (o STAR_YES=1) contesta que sí cuando no hay terminal donde preguntar.
  */
+import { spawnSync } from "node:child_process";
+import { delimiter, join } from "node:path";
 import pkg from "../package.json" with { type: "json" };
-import { changelogSection, readChangelog } from "./changelog.ts";
+import { changelogSection, readChangelog, today } from "./changelog.ts";
 import { StarError } from "./errors.ts";
+import { ghIn } from "./gh.ts";
 import { gitIn } from "./git.ts";
 import { hasOwnVersion } from "./manifests/types.ts";
 import { confirm, ask, interactive } from "./prompt.ts";
 import { checkReady } from "./readiness.ts";
+import { finishRelease, prepareRelease, type ReleaseDeps } from "./release.ts";
 import { bump, formatVersion, isLevel, LEVELS, type Level, parseVersion } from "./semver.ts";
 import {
   applyChanges,
@@ -35,6 +41,10 @@ Uso:
   star version set <x.y.z>     fija una versión en todos los manifiestos
   star version tag <tag>       falla si el tag no coincide con la versión
   star notes [versión]         las notas de esa versión en CHANGELOG.md
+  star release [nivel]         prepara una versión desde develop: puerta, rama
+                               release/<versión>, bump, commit, push y PR
+  star release finish [ver.]   cuando el CI pasa: squash con la versión como
+                               asunto, actualiza develop y empuja el tag
 
 Opciones:
   --yes                        contesta que sí cuando no hay terminal (o STAR_YES=1)
@@ -60,10 +70,10 @@ function report(entries: Entry[], version: string): boolean {
   return true;
 }
 
-async function chooseLevel(current: string): Promise<Level> {
+async function chooseLevel(current: string, command: string): Promise<Level> {
   if (!interactive()) {
     throw new StarError(
-      "no hay una terminal donde preguntar el nivel. Dilo: `star version bump patch|minor|major`.",
+      `no hay una terminal donde preguntar el nivel. Dilo: \`${command} patch|minor|major\`.`,
     );
   }
   console.log(`La versión actual es ${current}. ¿Cuál sale?\n`);
@@ -98,7 +108,7 @@ async function versionBump(root: string, levelArg: string | undefined, yes: bool
   }
   const entries = inspect(root);
   const current = currentVersion(entries);
-  const level = levelArg ?? (await chooseLevel(current));
+  const level = levelArg ?? (await chooseLevel(current, "star version bump"));
   const next = formatVersion(bump(parseVersion(current, "la versión actual"), level));
   const changelog = readChangelog(root);
 
@@ -173,6 +183,67 @@ function notes(root: string, raw: string | undefined) {
   console.log(section);
 }
 
+/**
+ * Corre la puerta con `node_modules/.bin` en el PATH.
+ *
+ * Bajo `bun run` o `vp run` ya está, pero `bunx star` no lo agrega, y entonces
+ * `vp check` no se encontraría. En Windows la variable se llama `Path`, y copiar
+ * `process.env` a un objeto pierde que no distinga mayúsculas: se busca la clave
+ * que haya.
+ */
+function runGate(root: string, commands: string[]): boolean {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  const key = Object.keys(env).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
+  env[key] = [join(root, "node_modules", ".bin"), env[key]].filter(Boolean).join(delimiter);
+  for (const command of commands) {
+    console.log(`$ ${command}`);
+    const r = spawnSync(command, { cwd: root, env, shell: true, stdio: "inherit" });
+    if (r.status !== 0) {
+      console.error(`\n✗ Falló: ${command}`);
+      return false;
+    }
+  }
+  return true;
+}
+
+function releaseDeps(root: string, yes: boolean): ReleaseDeps {
+  return {
+    root,
+    git: gitIn(root),
+    gh: ghIn(root),
+    runGate: (commands) => runGate(root, commands),
+    today: () => today(),
+    io: {
+      log: (message) => console.log(message),
+      warn: (message) => console.warn(`! ${message}`),
+      async confirm(question) {
+        if (yes) return true;
+        const answer = await confirm(question);
+        if (answer === "unanswered") {
+          throw new StarError(
+            "no había nadie para contestar. Córrelo desde una terminal, o con --yes si ya lo revisaste.",
+          );
+        }
+        return answer === "yes";
+      },
+    },
+  };
+}
+
+async function release(
+  root: string,
+  sub: string | undefined,
+  arg: string | undefined,
+  yes: boolean,
+) {
+  if (sub === "finish") return finishRelease(releaseDeps(root, yes), arg);
+  if (sub !== undefined && !isLevel(sub)) {
+    throw new StarError(`"${sub}" no es un nivel ni "finish". Usa patch, minor, major o finish.`);
+  }
+  const level = sub ?? (await chooseLevel(currentVersion(inspect(root)), "star release"));
+  return prepareRelease(releaseDeps(root, yes), level);
+}
+
 export async function main(argv: string[], root = process.cwd()): Promise<void> {
   const yes = argv.includes("--yes") || process.env.STAR_YES === "1";
   const [command, sub, arg] = argv.filter((a) => a !== "--yes");
@@ -207,6 +278,8 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
       }
     case "notes":
       return notes(root, sub);
+    case "release":
+      return release(root, sub, arg, yes);
     default:
       throw new StarError(`"${command}" no es un comando. Mira \`star --help\`.`);
   }

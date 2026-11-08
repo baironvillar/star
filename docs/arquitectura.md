@@ -58,17 +58,47 @@ La app se detecta sola: si hay `src-tauri/`, es escritorio; si no, web.
 
 ### El comando `release`
 
+Son dos fases, porque el bump vuelve a `develop` por un pull request como
+cualquier cambio, y se mergea con squash: el commit que llega a `develop` no es
+el de la rama, y el tag tiene que ir sobre el que llegó.
+
 ```bash
-vp run release minor
+vp run release minor     # desde develop
+vp run release finish    # cuando el CI del PR pasa
 ```
 
-1. Corre la puerta (por defecto la tarea `verify`: `vp check` y `vp test`).
-   Como es una tarea cacheada de Vite+, si nada cambió desde el último check
-   pasa al instante.
-2. Chequea: manifiestos de acuerdo, rama `release/<versión>`, tag libre,
-   sección del changelog escrita, árbol limpio en los manifiestos.
-3. Muestra el cambio y pregunta. Sin terminal no adivina: exige `--yes`.
-4. Escribe la versión, crea el commit `x.y.z` y el tag `vx.y.z`, y empuja.
+**`star release <nivel>`**, desde `develop`:
+
+1. Chequea: estar en `develop` al día con `origin` y sin commits propios, sin
+   cambios fuera del `CHANGELOG.md`, manifiestos de acuerdo, tag libre (local y
+   en `origin`), la rama `release/<versión>` libre y las notas escritas.
+2. Si no hay sección `## [x.y.z]` pero sí algo en `## [Sin publicar]`, propone
+   convertirlo en la sección de la versión, con la fecha de hoy, como se hacía a
+   mano.
+3. Corre la puerta. Va después de los chequeos baratos: no tiene sentido esperar
+   los tests de una versión que igual no puede salir.
+4. Muestra el cambio y las notas, y pregunta. Sin terminal no adivina: exige
+   `--yes`.
+5. Crea `release/<versión>`, escribe la versión, commitea `x.y.z`, empuja y abre
+   el PR a `develop` con las notas como cuerpo (si `gh` tiene sesión).
+
+**`star release finish`**, desde la rama de la versión o desde `develop`:
+
+1. Busca el PR. Frena si el CI falló o todavía corre, o si tiene conflictos.
+2. Pregunta, y lo mergea con squash usando la versión como asunto, sin el
+   número del PR. Mergeado a mano, GitHub lo agrega, y el workflow de release
+   rechaza ese commit porque GitHub titula la corrida del tag con su asunto.
+3. Actualiza `develop` y verifica lo que llegó: el asunto, la versión y las
+   notas.
+4. Crea el tag anotado `vx.y.z` y lo empuja. Desde ahí sigue la CI.
+
+**La puerta** sale de `"star": { "gate": ... }` en el `package.json` de la app.
+Sin configurar, si la app usa Vite+ es `vp check` y `vp test run`. En una app
+con Vite+ conviene apuntarla a una tarea cacheada (`"gate": "vp run verify"`):
+probado con Vite+ 1.5.0, un `vp run` anidado dentro de la tarea `release`
+funciona, y si nada cambió desde el último check sale de la caché. La tarea
+`release` no necesita `dependsOn`: star corre la puerta él mismo, así que
+tampoco se la salta quien llame `bunx star release` directo.
 
 **La tarea `release` tiene que ser `cache: false`.** Probado con Vite+ 1.5.0 en
 Windows: una tarea cacheada corre sin TTY (`stdin.isTTY` y `stdout.isTTY` son

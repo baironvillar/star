@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { Git } from "./git.ts";
 import type { Manifest } from "./manifests/types.ts";
 import { checkReady } from "./readiness.ts";
+import { fakeGit } from "./testing/fake-git.ts";
 import type { Entry } from "./version.ts";
 
 function entry(label: string, version: string): Entry {
@@ -14,13 +14,7 @@ function entry(label: string, version: string): Entry {
   return { manifest, text: "", state: { version } };
 }
 
-const ready: Git = {
-  branch: () => "release/0.2.0",
-  dirty: () => [],
-  localTagExists: () => false,
-  remoteTagExists: () => false,
-  behind: () => 0,
-};
+const ready = fakeGit({ branch: () => "release/0.2.0" });
 
 const base = {
   entries: [entry("package.json", "0.1.0"), entry("apps/web/package.json", "0.1.0")],
@@ -40,13 +34,11 @@ describe("checkReady", () => {
       ...base,
       entries: [entry("package.json", "0.1.0"), entry("apps/web/package.json", "0.0.9")],
       changelog: "## [0.1.0]\n\n- Lo anterior.\n",
-      git: {
+      git: fakeGit({
         branch: () => "develop",
         dirty: () => [" M package.json"],
         localTagExists: () => true,
-        remoteTagExists: () => false,
-        behind: () => 0,
-      },
+      }),
     });
     expect(problems).toHaveLength(5);
     expect(problems.join("\n")).toMatch(/apps\/web\/package\.json dice 0\.0\.9/);

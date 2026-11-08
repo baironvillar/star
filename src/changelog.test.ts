@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { changelogSection } from "./changelog.ts";
+import { changelogSection, promoteUnreleased, today } from "./changelog.ts";
 
 const CHANGELOG = `# Changelog
 
@@ -55,5 +55,39 @@ describe("changelogSection", () => {
 
   it("acepta CRLF", () => {
     expect(changelogSection("## [1.0.0]\r\n\r\n- Uno.\r\n", "1.0.0")).toBe("- Uno.");
+  });
+});
+
+describe("promoteUnreleased", () => {
+  const md =
+    "# Changelog\n\n## [Sin publicar]\n\n### Agregado\n\n- Algo nuevo.\n\n## [0.1.0]\n\n- Antes.\n";
+
+  it("convierte lo sin publicar en la versión y deja la sección vacía arriba", () => {
+    const out = promoteUnreleased(md, "0.2.0", "2026-11-08");
+    expect(out).toBe(
+      "# Changelog\n\n## [Sin publicar]\n\n## [0.2.0] - 2026-11-08\n\n### Agregado\n\n- Algo nuevo.\n\n## [0.1.0]\n\n- Antes.\n",
+    );
+    expect(changelogSection(out ?? "", "0.2.0")).toBe("### Agregado\n\n- Algo nuevo.");
+    expect(changelogSection(out ?? "", "0.1.0")).toBe("- Antes.");
+  });
+
+  it("acepta [Unreleased] y conserva CRLF", () => {
+    const crlf = "## [Unreleased]\r\n\r\n- Uno.\r\n";
+    expect(promoteUnreleased(crlf, "1.0.0", "2026-01-02")).toBe(
+      "## [Unreleased]\r\n\r\n## [1.0.0] - 2026-01-02\r\n\r\n- Uno.\r\n",
+    );
+  });
+
+  it("sin nada sin publicar no hay qué promover", () => {
+    expect(
+      promoteUnreleased("## [Sin publicar]\n\n## [0.1.0]\n\n- Antes.\n", "0.2.0", "x"),
+    ).toBeNull();
+    expect(promoteUnreleased("## [0.1.0]\n\n- Antes.\n", "0.2.0", "x")).toBeNull();
+  });
+});
+
+describe("today", () => {
+  it("usa la fecha local", () => {
+    expect(today(new Date(2026, 0, 5, 23, 30))).toBe("2026-01-05");
   });
 });
