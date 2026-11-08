@@ -11,8 +11,10 @@ que el anterior esté en uso.
 1. **Versiones.** Repo con Vite+ y Bun, adaptadores de manifiestos y
    `star version get|bump|set|tag` y `star notes`, con tests. flotas
    reemplaza su `scripts/version.ts`.
-2. **`release`.** Puerta, chequeos, bump, commit, tag y push. Las tareas
-   `verify` y `release` en el `vite.config.ts` de flotas.
+2. **`release`.** En dos fases: `star release <nivel>` (chequeos, puerta,
+   rama, bump, commit, push y PR) y `star release finish` (squash con el
+   asunto exacto, tag y push). Las tareas `verify` y `release` en el
+   `vite.config.ts` de flotas.
 3. **Hooks.** `commit-msg` y `pre-push` en el kit; `star init hooks` los
    instala. flotas borra su copia.
 4. **`doctor`.**

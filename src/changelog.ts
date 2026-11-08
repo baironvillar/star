@@ -21,7 +21,11 @@ export function changelogSection(markdown: string, version: string): string | nu
 
   const start = lines.findIndex((line) => heading.test(line));
   if (start < 0) return null;
+  return sectionBody(lines, start);
+}
 
+/** Lo que va después del encabezado `start`, hasta donde termina la sección. */
+function sectionBody(lines: string[], start: number): string | null {
   const body: string[] = [];
   for (const line of lines.slice(start + 1)) {
     if (
@@ -35,6 +39,39 @@ export function changelogSection(markdown: string, version: string): string | nu
   }
   const text = body.join("\n").trim();
   return text === "" ? null : text;
+}
+
+const UNRELEASED = /^##[ \t]+\[(Sin publicar|No publicado|Unreleased)\][ \t]*$/i;
+
+/**
+ * El changelog con lo "sin publicar" convertido en la sección de `version`.
+ *
+ * Es el paso que cada release hacía a mano: renombrar `## [Sin publicar]` a
+ * `## [0.2.0] - 2026-11-20` y dejar un `## [Sin publicar]` vacío arriba. Se
+ * hace igual que a mano, con el mismo encabezado que ya tenía el archivo, y
+ * se muestra antes de escribirlo.
+ *
+ * Devuelve `null` si no hay sección sin publicar o está vacía: entonces no
+ * hay notas, y la versión no sale.
+ */
+export function promoteUnreleased(markdown: string, version: string, date: string): string | null {
+  const eol = markdown.includes("\r\n") ? "\r\n" : "\n";
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const start = lines.findIndex((line) => UNRELEASED.test(line));
+  if (start < 0 || sectionBody(lines, start) === null) return null;
+  const promoted = [
+    ...lines.slice(0, start + 1),
+    "",
+    `## [${version}] - ${date}`,
+    ...lines.slice(start + 1),
+  ];
+  return promoted.join(eol);
+}
+
+/** La fecha de hoy en la hora de la máquina: la release sale el día que se ve en el reloj. */
+export function today(now = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 export function readChangelog(root: string): string {

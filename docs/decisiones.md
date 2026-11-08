@@ -72,3 +72,14 @@ La librería (CLI, workflows, hooks, plantillas) se desarrolla acá.
 [liftoff](https://github.com/baironvillar/liftoff) va a ser una extensión con
 interfaz gráfica construida encima de star, en su propio repo. Separarlas obliga
 a que todo lo que haga la interfaz se pueda hacer desde la terminal.
+
+## 12. `release` en dos fases
+
+El bump vuelve a `develop` por un pull request y se mergea con squash, así que
+el commit que llega no es el de la rama. El tag no se puede crear hasta después
+del merge: `star release <nivel>` deja la versión en un PR y
+`star release finish` la mergea y crea el tag.
+
+`finish` mergea él mismo para que el asunto sea la versión sola. Mergeado a
+mano, GitHub le agrega el número del PR, y el workflow de release rechaza ese
+commit. Antes había que acordarse de borrarlo en cada release.

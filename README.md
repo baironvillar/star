@@ -91,7 +91,7 @@ export default defineConfig({
   run: {
     tasks: {
       verify: ["vp check", "vp test run"],
-      release: { command: "bunx star release", cache: false, dependsOn: ["verify"] },
+      release: { command: "bunx star release", cache: false },
     },
   },
 });

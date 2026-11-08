@@ -44,6 +44,10 @@ bun run star -- version # el CLI desde el código
 src/cli.ts              comandos y salida; nada de lógica que no se pueda probar aparte
 src/version.ts          leer todos los manifiestos, planificar y aplicar la escritura
 src/readiness.ts        los chequeos antes de un bump (git es una interfaz, se prueba con un doble)
+src/release.ts          star release y star release finish (git y gh entran como dependencias)
+src/config.ts           la clave "star" del package.json de la app: base y puerta
+src/git.ts, src/gh.ts   las únicas piezas que llaman a git y a gh
+src/testing/            dobles para los tests
 src/manifests/          un adaptador por formato, sobre texto: read y write sin tocar el disco
 src/changelog.ts        la sección de una versión, escrita una sola vez
 src/json-text.ts        ubicar una clave de primer nivel en un JSON sin reformatearlo

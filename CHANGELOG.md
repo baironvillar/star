@@ -21,3 +21,11 @@ siguen [SemVer](https://semver.org/lang/es/).
   la CI.
 - `star notes [versión]`: imprime las notas de una versión desde
   `CHANGELOG.md`.
+- `star release [patch|minor|major]`: prepara una versión desde `develop`.
+  Revisa que todo esté en orden, corre la puerta (`vp check` y `vp test` por
+  defecto, o lo que diga `"star": { "gate" }`), crea `release/<versión>`, sube
+  la versión, commitea, empuja y abre el PR. Si las notas están en
+  `## [Sin publicar]`, propone convertirlas en la sección de la versión.
+- `star release finish`: cuando el CI del PR pasa, lo mergea con squash con la
+  versión como asunto, actualiza `develop`, verifica lo que llegó y empuja el
+  tag.
