@@ -277,15 +277,19 @@ async function initHooks(root: string, yes: boolean) {
     console.log("\nstar los reemplaza por una línea que llama a `star hook`.\n");
     if (!(await goAhead("¿Reemplazarlos?", yes))) return;
   }
-  installHooks(root, git, hooks);
+  const { fileModeOff } = installHooks(root, git, hooks);
   for (const hook of hooks) {
     const what = { missing: "creado", different: "reemplazado", same: "al día" }[hook.state];
     console.log(`  ${HOOKS_DIR}/${hook.name}  ${what}`);
   }
   console.log(`\n✓ git usa ${HOOKS_DIR} (core.hooksPath).`);
-  if (hooks.some((h) => h.state !== "same")) {
-    console.log("  Los hooks nuevos quedaron en el stage, como ejecutables: commitéalos.");
+  if (fileModeOff) {
+    console.log(
+      "  Se apagó core.filemode: Windows no guarda el bit de ejecución, y con eso\n" +
+        "  prendido git veía los hooks como cambiados a 644.",
+    );
   }
+  console.log("  Los hooks quedaron en el stage, como ejecutables: si cambiaron, commitéalos.");
 }
 
 function failSubject(subject: string, reason: string): never {
