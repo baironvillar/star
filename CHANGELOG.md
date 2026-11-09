@@ -6,6 +6,8 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.3.0] - 2026-11-09
+
 ### Agregado
 
 - `star verify <tag>`: todo lo que se revisa antes de construir un tag. El
