@@ -83,6 +83,7 @@ no se construye.
 ```bash
 bun add -d github:baironvillar/star#v0.1.0
 bunx star init hooks     # commit-msg y pre-push (ya existe)
+bunx star doctor         # qué falta o está mal (ya existe)
 bunx star init           # el resto: updater, secretos, changelog (previsto)
 ```
 

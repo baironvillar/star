@@ -36,6 +36,10 @@ export type Git = {
   setConfig(key: string, value: string): void;
   /** Pone los archivos en el stage como ejecutables, aunque el disco no lo diga (Windows). */
   addExecutable(paths: string[]): void;
+  /** El modo de cada archivo en el índice (`100644`, `100755`); los que no están, faltan. */
+  indexModes(paths: string[]): Record<string, string>;
+  /** Los archivos commiteados cuyo contenido calza con la expresión (ERE de git grep). */
+  trackedMatching(pattern: string): string[];
 
   switchCreate(name: string): void;
   switchTo(name: string): void;
@@ -117,6 +121,21 @@ export function gitIn(cwd: string): Git {
     },
     setConfig: (key, value) => must(["config", key, value]),
     addExecutable: (paths) => must(["add", "--chmod=+x", "--", ...paths]),
+    indexModes(paths) {
+      const modes: Record<string, string> = {};
+      const r = run(["ls-files", "-s", "--", ...paths]);
+      for (const line of r.out ? r.out.split(/\r?\n/) : []) {
+        const [meta, path] = line.split("\t");
+        const mode = meta?.split(" ")[0];
+        if (path && mode) modes[path] = mode;
+      }
+      return modes;
+    },
+    trackedMatching(pattern) {
+      // `-I` salta los binarios. git grep sale con 1 cuando no encuentra nada.
+      const r = run(["grep", "-l", "-I", "-E", "-e", pattern]);
+      return r.status === 0 && r.out ? r.out.split(/\r?\n/) : [];
+    },
 
     switchCreate: (name) => must(["switch", "-c", name]),
     switchTo: (name) => must(["switch", name]),

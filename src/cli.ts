@@ -13,6 +13,7 @@
  *   star hook <nombre> [args]       lo que corre un hook de git (no se llama a mano)
  *   star lint commits [rango]       revisa los mensajes de commit (CI)
  *   star lint branch <rama>         revisa el nombre de una rama (CI)
+ *   star doctor                     qué falta o está mal en la app
  *
  * `--yes` (o STAR_YES=1) contesta que sí cuando no hay terminal donde preguntar.
  */
@@ -33,6 +34,7 @@ import {
 } from "./conventions.ts";
 import { StarError } from "./errors.ts";
 import { ghIn } from "./gh.ts";
+import { diagnose } from "./doctor.ts";
 import { gitIn } from "./git.ts";
 import { HOOKS_DIR, inspectHooks, installHooks, lintCommits } from "./hooks.ts";
 import { hasOwnVersion } from "./manifests/types.ts";
@@ -66,6 +68,7 @@ Uso:
   star lint commits [rango]    revisa los mensajes de base..head, o de un commit
   star lint branch <rama>      revisa el nombre de una rama; con --into <base>,
                                también hacia dónde va el pull request
+  star doctor                  qué falta o está mal en la app, y cómo arreglarlo
 
 Opciones:
   --yes                        contesta que sí cuando no hay terminal (o STAR_YES=1)
@@ -363,6 +366,22 @@ function lint(root: string, what: string | undefined, arg: string | undefined, i
   }
 }
 
+function doctor(root: string) {
+  const findings = diagnose({ root, git: gitIn(root), gh: ghIn(root) });
+  const width = Math.max(...findings.map((f) => f.area.length));
+  const mark = { ok: "✓", warn: "!", error: "✗" };
+  for (const f of findings) {
+    console.log(`  ${mark[f.level]} ${f.area.padEnd(width)}  ${f.message}`);
+    if (f.fix && f.level !== "ok") console.log(`    ${" ".repeat(width)}  → ${f.fix}`);
+  }
+  const errors = findings.filter((f) => f.level === "error").length;
+  const warnings = findings.filter((f) => f.level === "warn").length;
+  if (errors > 0) {
+    throw new StarError(`${errors} problema(s) y ${warnings} aviso(s).`);
+  }
+  console.log(warnings > 0 ? `\n! ${warnings} aviso(s), nada que frene.` : "\n✓ Todo en orden.");
+}
+
 /** Saca `--opcion valor` de los argumentos y devuelve el valor. */
 function takeOption(args: string[], name: string): string | undefined {
   const i = args.indexOf(name);
@@ -419,6 +438,8 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
       return hook(root, sub, arg);
     case "lint":
       return lint(root, sub, arg, into);
+    case "doctor":
+      return doctor(root);
     default:
       throw new StarError(`"${command}" no es un comando. Mira \`star --help\`.`);
   }

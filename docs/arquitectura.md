@@ -137,6 +137,22 @@ exec bunx star hook commit-msg "$@"
   protegidas son los de flotas y Starless. La base protegida sale de
   `"star": { "base" }`. Ver la pregunta abierta en [`alcance.md`](alcance.md).
 
+### `doctor`
+
+`star doctor` corre una lista de chequeos y marca cada uno como ✓, aviso (!) o
+problema (✗), con el comando que lo arregla. Sale con error sólo si hay un
+problema: algo que haría fallar `release` o la CI, o un secreto commiteado.
+
+- **Lee, no ejecuta.** `vite.config.ts` se lee como texto para encontrar la
+  tarea `release`: importarlo correría código de la app solo para diagnosticarla.
+- **Las notas se exigen a la versión con tag.** La versión inicial de una app
+  que nunca publicó no tiene nada que contar.
+- **Llaves privadas:** `git grep` sobre lo commiteado, buscando PEM y la llave
+  del updater de Tauri. Una llave que llegó a git ya se filtró: el arreglo es
+  rotarla, no borrarla.
+- **Secretos de GitHub (sólo nombres) y el updater** entran con el target
+  `tauri`, en la fase 2.
+
 ### Workflows reutilizables
 
 ```
