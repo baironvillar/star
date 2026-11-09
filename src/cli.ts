@@ -15,11 +15,12 @@
  *   star lint commits [rango]       revisa los mensajes de commit (CI)
  *   star lint branch <rama>         revisa el nombre de una rama (CI)
  *   star doctor                     qué falta o está mal en la app
+ *   star verify <tag>               todo lo que se revisa antes de construir un tag (CI)
  *
  * `--yes` (o STAR_YES=1) contesta que sí cuando no hay terminal donde preguntar.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import pkg from "../package.json" with { type: "json" };
 import { changelogSection, EMPTY_CHANGELOG, readChangelog, today } from "./changelog.ts";
@@ -36,6 +37,7 @@ import {
 import { StarError } from "./errors.ts";
 import { ghIn } from "./gh.ts";
 import { diagnose } from "./doctor.ts";
+import { verifyTag } from "./verify.ts";
 import { gitIn } from "./git.ts";
 import { HOOKS_DIR, inspectHooks, installHooks, lintCommits } from "./hooks.ts";
 import { hasOwnVersion } from "./manifests/types.ts";
@@ -71,6 +73,10 @@ Uso:
   star lint branch <rama>      revisa el nombre de una rama; con --into <base>,
                                también hacia dónde va el pull request
   star doctor                  qué falta o está mal en la app, y cómo arreglarlo
+  star verify <tag>            antes de construir un tag: el commit se llama
+                               como la versión, el tag coincide, hay notas y
+                               pasa la puerta. Con --notes-file <ruta> escribe
+                               las notas ahí
 
 Opciones:
   --yes                        contesta que sí cuando no hay terminal (o STAR_YES=1)
@@ -395,6 +401,24 @@ function doctor(root: string) {
   console.log(warnings > 0 ? `\n! ${warnings} aviso(s), nada que frene.` : "\n✓ Todo en orden.");
 }
 
+function verify(root: string, tag: string | undefined, notesFile: string | undefined) {
+  if (!tag) throw new StarError("falta el tag: `star verify v0.2.0`.");
+  const { version, notes } = verifyTag(
+    {
+      root,
+      git: gitIn(root),
+      runGate: (commands) => runGate(root, commands),
+      log: (message) => console.log(message),
+    },
+    tag,
+  );
+  if (notesFile) writeFileSync(notesFile, `${notes}\n`);
+  // En GitHub Actions la versión sale como output del paso, para los jobs que
+  // vienen después (el título de la release, el tag de una imagen).
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+  console.log(`\n✓ ${tag} se puede construir.`);
+}
+
 /** Saca `--opcion valor` de los argumentos y devuelve el valor. */
 function takeOption(args: string[], name: string): string | undefined {
   const i = args.indexOf(name);
@@ -408,6 +432,7 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
   const yes = argv.includes("--yes") || process.env.STAR_YES === "1";
   const args = argv.filter((a) => a !== "--yes");
   const into = takeOption(args, "--into");
+  const notesFile = takeOption(args, "--notes-file");
   const [command, sub, arg] = args;
 
   switch (command) {
@@ -452,6 +477,8 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
       return lint(root, sub, arg, into);
     case "doctor":
       return doctor(root);
+    case "verify":
+      return verify(root, sub, notesFile);
     default:
       throw new StarError(`"${command}" no es un comando. Mira \`star --help\`.`);
   }

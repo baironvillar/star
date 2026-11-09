@@ -160,18 +160,25 @@ tag v* ──► verify.yml ──► web-release.yml    (app web: + jobs propio
                       └─► tauri-release.yml  (app de escritorio)
 ```
 
-- **`verify.yml`:** el commit del tag se llama como la versión, el tag coincide
-  con los manifiestos, existen las notas, pasa la puerta.
+- **`verify.yml`:** corre `star verify` en el tag: el commit se llama como la
+  versión, el tag coincide con los manifiestos, existen las notas, pasa la
+  puerta. Devuelve `version` y sube las notas como artefacto.
 - **`tauri-release.yml`:** matriz Windows y Linux con `tauri-action` v1, que
   compila, firma, crea la release y junta las plataformas en `latest.json`.
   Después, un job verifica la release en borrador.
 - **`web-release.yml`:** crea la release en borrador con las notas y los assets
-  que la app subió como artefactos del workflow.
+  que la app subió como artefactos del workflow, y revisa que haya quedado en
+  borrador, en el tag correcto y con todos los archivos. No hace checkout ni
+  instala nada: sólo llama a `gh`.
 
 La lógica vive en el CLI, no en el YAML: los workflows llaman a `star verify`
 y similares. Así el YAML queda delgado, sirve igual en Windows y Linux, y la
-misma regla corre en local y en la CI. El workflow obtiene el CLI en la misma
-versión que él (`job_workflow_sha`).
+misma regla corre en local y en la CI. El workflow usa el star **instalado en
+la app** (ver la decisión 15), y `doctor` avisa si la versión del workflow
+(`@v0.3.0`) y la instalada no coinciden.
+
+star se publica con estos mismos workflows (`.github/workflows/release.yml`),
+así que cada versión del kit los prueba en GitHub.
 
 ### Updater (escritorio)
 

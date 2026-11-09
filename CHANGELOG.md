@@ -8,6 +8,20 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ### Agregado
 
+- `star verify <tag>`: todo lo que se revisa antes de construir un tag. El
+  commit se llama como la versión, el tag coincide con los manifiestos, hay
+  notas y pasa la puerta. Con `--notes-file` escribe las notas, y en GitHub
+  Actions deja `version` como output.
+- Workflow reutilizable `verify.yml`: corre `star verify` en el tag y sube las
+  notas como artefacto.
+- Workflow reutilizable `web-release.yml`: crea la release en borrador con las
+  notas y los artefactos que la app construyó, y revisa que haya quedado en
+  borrador, en el tag correcto y con todos los archivos.
+- `star doctor` avisa si los workflows de star que usa la app son de otra
+  versión que la instalada.
+
+### Agregado
+
 - `star doctor`: revisa la app y dice qué falta o está mal, y cómo arreglarlo.
   Mira que los manifiestos coincidan, las notas de la versión publicada y la
   sección `## [Sin publicar]`, la puerta, los hooks (instalados, con
