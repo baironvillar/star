@@ -20,9 +20,8 @@ star/
     targets/
       web.ts            release en borrador + verificación
       tauri.ts          updater, verificación de latest.json
-  hooks/
-    commit-msg          sh, el mismo archivo para el hook y la CI
-    pre-push
+    conventions.ts      la regla de commits y ramas, para los hooks y la CI
+    hooks.ts            star init hooks y star lint commits
   .github/workflows/
     verify.yml          reutilizable: chequeos comunes a cualquier app
     web-release.yml     reutilizable: release en borrador para una app web
@@ -108,6 +107,33 @@ recibe la terminal real, aunque dependa de una tarea cacheada: `verify` se
 reproduce desde la caché ("cache hit, replaying") y `release` igual puede
 preguntar. Los argumentos que siguen al nombre (`minor`) llegan al comando.
 `doctor` revisa que la tarea `release` de la app no tenga caché.
+
+### Hooks de git
+
+La convención de commits y ramas vive en `src/conventions.ts`, y la corren dos
+comandos: `star hook <nombre>` desde el hook de git y `star lint` desde la CI.
+Lo que pasa en local no falla en el PR, porque es el mismo código.
+
+En la app queda una línea por hook, que `star init hooks` escribe en
+`.githooks` y que se commitea:
+
+```sh
+#!/usr/bin/env sh
+exec bunx star hook commit-msg "$@"
+```
+
+- **No se copia el script.** flotas y Starless tenían cada uno su `commit-msg`
+  en `sh`, y las copias ya diferían. Con una línea que llama a star, una
+  corrección llega a todas las apps al subir la versión.
+- **`core.hooksPath` apunta a la carpeta de la app**, no a `node_modules`: la
+  app puede tener sus propios hooks al lado (flotas tiene un `pre-commit` con
+  `vp staged`), y los hooks quedan en el repo donde se ven.
+- **Se ponen en el stage como ejecutables** (`git add --chmod=+x`). Windows no
+  guarda el bit en el disco; sin esto llegan al índice como 644, y en un clon
+  de Linux o macOS git los ignora con un aviso.
+- **La regla no es configurable todavía.** Los tipos, el largo y las ramas
+  protegidas son los de flotas y Starless. La base protegida sale de
+  `"star": { "base" }`. Ver la pregunta abierta en [`alcance.md`](alcance.md).
 
 ### Workflows reutilizables
 

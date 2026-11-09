@@ -27,6 +27,15 @@ export type Git = {
   fetch(): boolean;
   /** El asunto del commit de HEAD. */
   headSubject(): string;
+  /** El mensaje entero de un commit, o `null` si ese commit no está en el clon. */
+  commitMessage(rev: string): string | null;
+  /** Los commits de `base..head` sin los merges, del más nuevo al más viejo. */
+  commitsBetween(base: string, head: string): string[];
+  /** El valor de una clave de `git config`, o `null` si no está. */
+  getConfig(key: string): string | null;
+  setConfig(key: string, value: string): void;
+  /** Pone los archivos en el stage como ejecutables, aunque el disco no lo diga (Windows). */
+  addExecutable(paths: string[]): void;
 
   switchCreate(name: string): void;
   switchTo(name: string): void;
@@ -89,6 +98,25 @@ export function gitIn(cwd: string): Git {
     },
     fetch: () => run(["fetch", "--quiet", "origin"], 60_000).status === 0,
     headSubject: () => run(["log", "-1", "--format=%s"]).out,
+    commitMessage(rev) {
+      // `-e` antes: `git log` de un sha que no existe falla con un error largo, y
+      // "ese commit no está" es una respuesta, no un error.
+      if (run(["cat-file", "-e", `${rev}^{commit}`]).status !== 0) return null;
+      // El mensaje lo saca git y no un pipe del shell: en un runner de Windows el
+      // pipe de PowerShell recodifica el texto.
+      return run(["log", "-1", "--format=%B", rev]).out;
+    },
+    commitsBetween(base, head) {
+      const r = run(["rev-list", "--no-merges", `${base}..${head}`]);
+      if (r.status !== 0) throw new StarError(`git no pudo listar ${base}..${head}:\n${r.err}`);
+      return r.out ? r.out.split(/\r?\n/) : [];
+    },
+    getConfig(key) {
+      const r = run(["config", "--get", key]);
+      return r.status === 0 ? r.out : null;
+    },
+    setConfig: (key, value) => must(["config", key, value]),
+    addExecutable: (paths) => must(["add", "--chmod=+x", "--", ...paths]),
 
     switchCreate: (name) => must(["switch", "-c", name]),
     switchTo: (name) => must(["switch", name]),
