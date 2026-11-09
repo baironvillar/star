@@ -6,6 +6,8 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.2.0] - 2026-11-09
+
 ### Agregado
 
 - `star init hooks`: instala los hooks `commit-msg` y `pre-push` en
