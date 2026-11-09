@@ -113,3 +113,15 @@ dos casos:
   (`CHANGELOG.md`, hooks) y `doctor` dice qué comando lo crea.
 - **Se salta lo que no aplica.** Sin `vite.config.ts` no hay tarea `release`
   que revisar; sin `src-tauri/` no hay updater.
+
+## 15. Los workflows usan el star instalado en la app
+
+La propuesta era que `verify.yml` descargara star en la misma versión que el
+workflow (`job_workflow_sha`). Usa el que la app tiene instalado (`bunx star`):
+
+- La regla que pasó en local (`star release`, los hooks) es la misma que corre
+  en la CI. Con dos copias, una app podía pasar en local y fallar en el tag.
+- No hay un segundo checkout ni un segundo `bun install`.
+
+El costo es que el workflow y el paquete pueden quedar en versiones distintas.
+`doctor` lo avisa, y la regla es subir los dos juntos.

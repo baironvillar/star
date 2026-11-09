@@ -1,0 +1,32 @@
+name: release
+
+# star se publica con sus propios workflows: verify.yml y web-release.yml se
+# prueban de verdad en cada versión del kit. Publicar es `vp run release` (o
+# `bun run star -- release`) y `release finish`, que empuja el tag.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+    with:
+      # El kit no se tiene instalado a sí mismo: `bunx star` buscaría en npm un
+      # paquete ajeno con ese nombre.
+      star: bun src/cli.ts
+
+  release:
+    needs: verify
+    permissions:
+      contents: write
+    uses: ./.github/workflows/web-release.yml
+    with:
+      version: ${{ needs.verify.outputs.version }}

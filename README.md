@@ -106,11 +106,20 @@ on:
     tags: ["v*"]
 jobs:
   verify:
-    uses: baironvillar/star/.github/workflows/verify.yml@v0
-  release:
+    uses: baironvillar/star/.github/workflows/verify.yml@v0.3.0
+  build:
     needs: verify
-    uses: baironvillar/star/.github/workflows/tauri-release.yml@v0
-    secrets: inherit
+    # lo propio de la app: build, imagen Docker; sube sus archivos con
+    # actions/upload-artifact
+  release:
+    needs: [verify, build]
+    permissions:
+      contents: write
+    uses: baironvillar/star/.github/workflows/web-release.yml@v0.3.0
+    with:
+      version: ${{ needs.verify.outputs.version }}
+      assets: web-bundle
+    # una app de escritorio usará tauri-release.yml (fase 2)
 ```
 
 ## Documentos

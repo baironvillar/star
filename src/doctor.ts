@@ -243,7 +243,41 @@ function ci(root: string): Finding[] {
           "bunx star lint commits y bunx star lint branch en el workflow de los PR",
         ),
   );
+  findings.push(...workflowVersions(root, texts));
   return findings;
+}
+
+/** Las versiones de los workflows de star que usa la app: `…/verify.yml@v0.3.0` → `0.3.0`. */
+export function starWorkflowRefs(text: string): string[] {
+  // Sólo las líneas `uses:`: un comentario con el ejemplo no es un uso.
+  const refs = text.matchAll(
+    /^\s*uses:\s*baironvillar\/star\/\.github\/workflows\/[\w.-]+@v(\S+)/gm,
+  );
+  return [...new Set([...refs].map((m) => m[1] ?? ""))];
+}
+
+/**
+ * Los workflows de star corren el star instalado en la app. Si el workflow es
+ * de otra versión, puede llamar a un comando que esa versión no tiene.
+ */
+function workflowVersions(root: string, texts: string[]): Finding[] {
+  const refs = [...new Set(texts.flatMap(starWorkflowRefs))];
+  if (refs.length === 0) return [];
+  const installed = join(root, "node_modules", "@baironvillar", "star", "package.json");
+  if (!existsSync(installed)) {
+    return [warn("ci", "los workflows usan star, pero no está instalado", "bun install")];
+  }
+  const { version } = JSON.parse(readFileSync(installed, "utf8")) as { version: string };
+  const other = refs.filter((r) => r !== version);
+  return other.length > 0
+    ? [
+        warn(
+          "ci",
+          `los workflows de star van en v${other.join(", v")} y la app tiene instalada la ${version}`,
+          `usa @v${version} en los workflows, o instala esa versión`,
+        ),
+      ]
+    : [ok("ci", `los workflows de star van en la misma versión instalada (${version})`)];
 }
 
 function remote(git: Git, gh: Gh, root: string): Finding[] {
