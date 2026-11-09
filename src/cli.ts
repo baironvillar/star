@@ -9,16 +9,32 @@
  *   star notes [versión]            la sección del CHANGELOG de esa versión
  *   star release [nivel]            prepara una versión: rama, bump, commit, push y PR
  *   star release finish [versión]   la mergea con el asunto exacto y empuja el tag
+ *   star init hooks                 instala commit-msg y pre-push en .githooks
+ *   star hook <nombre> [args]       lo que corre un hook de git (no se llama a mano)
+ *   star lint commits [rango]       revisa los mensajes de commit (CI)
+ *   star lint branch <rama>         revisa el nombre de una rama (CI)
  *
  * `--yes` (o STAR_YES=1) contesta que sí cuando no hay terminal donde preguntar.
  */
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import pkg from "../package.json" with { type: "json" };
 import { changelogSection, readChangelog, today } from "./changelog.ts";
+import { readConfig } from "./config.ts";
+import {
+  BRANCH_HELP,
+  checkBranch,
+  checkMessage,
+  checkPullRequest,
+  checkPush,
+  SUBJECT_HELP,
+  subjectOf,
+} from "./conventions.ts";
 import { StarError } from "./errors.ts";
 import { ghIn } from "./gh.ts";
 import { gitIn } from "./git.ts";
+import { HOOKS_DIR, inspectHooks, installHooks, lintCommits } from "./hooks.ts";
 import { hasOwnVersion } from "./manifests/types.ts";
 import { confirm, ask, interactive } from "./prompt.ts";
 import { checkReady } from "./readiness.ts";
@@ -45,6 +61,11 @@ Uso:
                                release/<versión>, bump, commit, push y PR
   star release finish [ver.]   cuando el CI pasa: squash con la versión como
                                asunto, actualiza develop y empuja el tag
+  star init hooks              instala commit-msg y pre-push en .githooks y
+                               apunta git ahí (core.hooksPath)
+  star lint commits [rango]    revisa los mensajes de base..head, o de un commit
+  star lint branch <rama>      revisa el nombre de una rama; con --into <base>,
+                               también hacia dónde va el pull request
 
 Opciones:
   --yes                        contesta que sí cuando no hay terminal (o STAR_YES=1)
@@ -244,9 +265,118 @@ async function release(
   return prepareRelease(releaseDeps(root, yes), level);
 }
 
+async function initHooks(root: string, yes: boolean) {
+  const git = gitIn(root);
+  const hooks = inspectHooks(root);
+  const different = hooks.filter((h) => h.state === "different");
+  if (different.length > 0) {
+    // Lo que ya hay puede ser la copia vieja de la convención, o un hook propio
+    // de la app: no se pisa sin preguntar.
+    console.log(`Ya hay hooks con otro contenido en ${HOOKS_DIR}:\n`);
+    for (const hook of different) console.log(`  ${HOOKS_DIR}/${hook.name}`);
+    console.log("\nstar los reemplaza por una línea que llama a `star hook`.\n");
+    if (!(await goAhead("¿Reemplazarlos?", yes))) return;
+  }
+  const { fileModeOff } = installHooks(root, git, hooks);
+  for (const hook of hooks) {
+    const what = { missing: "creado", different: "reemplazado", same: "al día" }[hook.state];
+    console.log(`  ${HOOKS_DIR}/${hook.name}  ${what}`);
+  }
+  console.log(`\n✓ git usa ${HOOKS_DIR} (core.hooksPath).`);
+  if (fileModeOff) {
+    console.log(
+      "  Se apagó core.filemode: Windows no guarda el bit de ejecución, y con eso\n" +
+        "  prendido git veía los hooks como cambiados a 644.",
+    );
+  }
+  console.log("  Los hooks quedaron en el stage, como ejecutables: si cambiaron, commitéalos.");
+}
+
+function failSubject(subject: string, reason: string): never {
+  throw new StarError(
+    `El mensaje de commit no cumple la convención: ${reason}.\n\n  asunto: "${subject}"\n\n${SUBJECT_HELP}`,
+  );
+}
+
+async function hook(root: string, name: string | undefined, arg: string | undefined) {
+  switch (name) {
+    case "commit-msg": {
+      if (!arg) throw new StarError("git le pasa al hook commit-msg el archivo del mensaje.");
+      const message = readFileSync(arg, "utf8");
+      const verdict = checkMessage(message);
+      if (!verdict.ok) failSubject(subjectOf(message), verdict.reason);
+      return;
+    }
+    case "pre-push": {
+      const { base } = readConfig(root);
+      const failed = checkPush(await Bun.stdin.text(), base).filter((r) => !r.verdict.ok);
+      if (failed.length === 0) return;
+      const lines = failed.map((r) => `  ${r.ref}: ${r.verdict.ok ? "" : r.verdict.reason}`);
+      // A una rama protegida no le sirve la ayuda de cómo renombrar: le sirve
+      // saber cómo sacar el cambio a su propia rama.
+      const help = failed.some((r) => r.ref === base || r.ref === "main")
+        ? `Todo cambio llega a ${base} por un pull request desde su propia rama:\n\n  git switch -c fix/short-description\n  git push -u origin fix/short-description`
+        : BRANCH_HELP;
+      throw new StarError(
+        `Este push no sigue la convención de ramas:\n\n${lines.join("\n")}\n\n${help}`,
+      );
+    }
+    default:
+      throw new StarError(`"hook ${name ?? ""}" no existe. Los hooks son commit-msg y pre-push.`);
+  }
+}
+
+function lint(root: string, what: string | undefined, arg: string | undefined, into?: string) {
+  switch (what) {
+    case "commits": {
+      const { onlyTip, results } = lintCommits(gitIn(root), arg ?? "HEAD");
+      if (onlyTip) {
+        // Es lo normal en el primer push de una rama o después de un force-push,
+        // pero se dice: un rango mal escrito no puede pasar por uno revisado.
+        console.warn("! La base del rango no está en este clon: se revisa sólo la punta.");
+      }
+      for (const r of results) {
+        console.log(`  ${r.verdict.ok ? "✓" : "✗"} ${r.sha.slice(0, 12)}  ${r.subject}`);
+      }
+      const failed = results.filter((r) => !r.verdict.ok);
+      if (failed.length === 0) return;
+      const lines = failed.map(
+        (r) => `  ${r.sha.slice(0, 12)}: ${r.verdict.ok ? "" : r.verdict.reason}`,
+      );
+      throw new StarError(
+        `Hay commits fuera de la convención:\n\n${lines.join("\n")}\n\n${SUBJECT_HELP}`,
+      );
+    }
+    case "branch": {
+      if (!arg) throw new StarError("falta la rama: `star lint branch feat/algo`.");
+      const verdict = into ? checkPullRequest(arg, into, readConfig(root).base) : checkBranch(arg);
+      if (!verdict.ok) {
+        throw new StarError(
+          `La rama "${arg}" no sigue la convención: ${verdict.reason}.\n\n${BRANCH_HELP}`,
+        );
+      }
+      console.log(`✓ ${arg}${into ? ` → ${into}` : ""}`);
+      return;
+    }
+    default:
+      throw new StarError(`"lint ${what ?? ""}" no existe. Usa commits o branch.`);
+  }
+}
+
+/** Saca `--opcion valor` de los argumentos y devuelve el valor. */
+function takeOption(args: string[], name: string): string | undefined {
+  const i = args.indexOf(name);
+  if (i === -1) return undefined;
+  const [, value] = args.splice(i, 2);
+  if (value === undefined) throw new StarError(`a ${name} le falta el valor.`);
+  return value;
+}
+
 export async function main(argv: string[], root = process.cwd()): Promise<void> {
   const yes = argv.includes("--yes") || process.env.STAR_YES === "1";
-  const [command, sub, arg] = argv.filter((a) => a !== "--yes");
+  const args = argv.filter((a) => a !== "--yes");
+  const into = takeOption(args, "--into");
+  const [command, sub, arg] = args;
 
   switch (command) {
     case undefined:
@@ -280,6 +410,15 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
       return notes(root, sub);
     case "release":
       return release(root, sub, arg, yes);
+    case "init":
+      if (sub !== "hooks") {
+        throw new StarError(`"init ${sub ?? ""}" no existe. Por ahora: init hooks.`);
+      }
+      return initHooks(root, yes);
+    case "hook":
+      return hook(root, sub, arg);
+    case "lint":
+      return lint(root, sub, arg, into);
     default:
       throw new StarError(`"${command}" no es un comando. Mira \`star --help\`.`);
   }

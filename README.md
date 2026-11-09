@@ -82,7 +82,8 @@ no se construye.
 
 ```bash
 bun add -d github:baironvillar/star#v0.1.0
-bunx star init
+bunx star init hooks     # commit-msg y pre-push (ya existe)
+bunx star init           # el resto: updater, secretos, changelog (previsto)
 ```
 
 ```ts

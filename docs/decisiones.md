@@ -83,3 +83,17 @@ del merge: `star release <nivel>` deja la versión en un PR y
 `finish` mergea él mismo para que el asunto sea la versión sola. Mergeado a
 mano, GitHub le agrega el número del PR, y el workflow de release rechaza ese
 commit. Antes había que acordarse de borrarlo en cada release.
+
+## 13. Los hooks llaman a star; la regla está en TypeScript
+
+La propuesta original era llevar los `commit-msg` y `pre-push` de flotas, en
+`sh`, como archivos del kit. Se escribieron en TypeScript (`conventions.ts`) y
+la app guarda una línea por hook que llama a `bunx star hook`.
+
+- Se prueban con Vitest como el resto, sin depender de `grep` ni de la
+  collation del sistema.
+- Bun ya es requisito de cualquier app que use star, así que el hook no suma
+  dependencias.
+- El hook local y la CI (`star lint`) corren el mismo código.
+
+El costo es que cada commit arranca Bun, unos 100 ms.
