@@ -1,7 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { main } from "./cli.ts";
+import { promoteUnreleased } from "./changelog.ts";
 import { diagnose, type Finding, releaseTask } from "./doctor.ts";
 import type { Gh } from "./gh.ts";
 import type { Git } from "./git.ts";
@@ -111,6 +113,51 @@ describe("diagnose", () => {
     expect(found).toMatch(/warn changelog: no hay una sección "## \[Sin publicar\]"/);
     expect(found).toMatch(/error secretos: .*src-tauri\/updater\.key/);
     expect(found).toMatch(/warn github: gh no está instalado/);
+  });
+
+  it("una app recién creada: dice qué falta y con qué comando, sin inventar errores", () => {
+    const root = mkdtempSync(join(tmpdir(), "star-doctor-"));
+    dirs.push(root);
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ version: "0.0.0", devDependencies: { "vite-plus": "1.5.0" } }),
+    );
+    const git = fakeGit({ remoteBranchExists: () => true, getConfig: () => null });
+    const findings = diagnose({ root, git, gh: gh() }).filter((f) => f.level !== "ok");
+    expect(findings.map((f) => `${f.level} ${f.area} → ${f.fix ?? ""}`)).toEqual([
+      "error changelog → bunx star init changelog",
+      "warn hooks → bunx star init hooks",
+      "warn hooks → bunx star init hooks",
+      `warn ci → un workflow que corra la puerta, bunx star lint commits y bunx star lint branch`,
+      "warn github → ",
+    ]);
+  });
+
+  it("star init changelog crea uno que release sabe promover, y nunca pisa el que hay", async () => {
+    const root = mkdtempSync(join(tmpdir(), "star-doctor-"));
+    dirs.push(root);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await main(["init", "changelog"], root);
+      const created = readFileSync(join(root, "CHANGELOG.md"), "utf8");
+      // Vacío no se promueve (no hay nada que publicar); con una nota, sí.
+      expect(promoteUnreleased(created, "0.1.0", "2026-11-09")).toBeNull();
+      expect(
+        promoteUnreleased(
+          `${created}
+- Primera versión.
+`,
+          "0.1.0",
+          "2026-11-09",
+        ),
+      ).toContain("## [0.1.0] - 2026-11-09");
+
+      writeFileSync(join(root, "CHANGELOG.md"), "# Mío\n");
+      await main(["init", "changelog"], root);
+      expect(readFileSync(join(root, "CHANGELOG.md"), "utf8")).toBe("# Mío\n");
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it("sin Vite+ ni puerta configurada, release no tiene qué correr", () => {

@@ -10,6 +10,7 @@
  *   star release [nivel]            prepara una versión: rama, bump, commit, push y PR
  *   star release finish [versión]   la mergea con el asunto exacto y empuja el tag
  *   star init hooks                 instala commit-msg y pre-push en .githooks
+ *   star init changelog             crea un CHANGELOG.md vacío, si no hay uno
  *   star hook <nombre> [args]       lo que corre un hook de git (no se llama a mano)
  *   star lint commits [rango]       revisa los mensajes de commit (CI)
  *   star lint branch <rama>         revisa el nombre de una rama (CI)
@@ -18,10 +19,10 @@
  * `--yes` (o STAR_YES=1) contesta que sí cuando no hay terminal donde preguntar.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import pkg from "../package.json" with { type: "json" };
-import { changelogSection, readChangelog, today } from "./changelog.ts";
+import { changelogSection, EMPTY_CHANGELOG, readChangelog, today } from "./changelog.ts";
 import { readConfig } from "./config.ts";
 import {
   BRANCH_HELP,
@@ -65,6 +66,7 @@ Uso:
                                asunto, actualiza develop y empuja el tag
   star init hooks              instala commit-msg y pre-push en .githooks y
                                apunta git ahí (core.hooksPath)
+  star init changelog          crea un CHANGELOG.md con "## [Sin publicar]"
   star lint commits [rango]    revisa los mensajes de base..head, o de un commit
   star lint branch <rama>      revisa el nombre de una rama; con --into <base>,
                                también hacia dónde va el pull request
@@ -295,6 +297,17 @@ async function initHooks(root: string, yes: boolean) {
   console.log("  Los hooks quedaron en el stage, como ejecutables: si cambiaron, commitéalos.");
 }
 
+function initChangelog(root: string) {
+  const path = join(root, "CHANGELOG.md");
+  // Un changelog que ya existe tiene la historia de la app: nunca se pisa.
+  if (existsSync(path)) {
+    console.log("✓ Ya hay un CHANGELOG.md; no se tocó.");
+    return;
+  }
+  writeFileSync(path, EMPTY_CHANGELOG);
+  console.log('✓ CHANGELOG.md creado. Anota lo próximo en "## [Sin publicar]".');
+}
+
 function failSubject(subject: string, reason: string): never {
   throw new StarError(
     `El mensaje de commit no cumple la convención: ${reason}.\n\n  asunto: "${subject}"\n\n${SUBJECT_HELP}`,
@@ -430,10 +443,9 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
     case "release":
       return release(root, sub, arg, yes);
     case "init":
-      if (sub !== "hooks") {
-        throw new StarError(`"init ${sub ?? ""}" no existe. Por ahora: init hooks.`);
-      }
-      return initHooks(root, yes);
+      if (sub === "hooks") return initHooks(root, yes);
+      if (sub === "changelog") return initChangelog(root);
+      throw new StarError(`"init ${sub ?? ""}" no existe. Usa init hooks o init changelog.`);
     case "hook":
       return hook(root, sub, arg);
     case "lint":

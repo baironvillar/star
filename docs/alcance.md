@@ -104,3 +104,6 @@ Para discutir. Cuando se decida una, se mueve a [`decisiones.md`](decisiones.md)
 4. **Monorepos con más de una app publicable.** flotas publica API y web juntas
    con una sola versión. ¿Hace falta soportar versiones distintas por paquete?
    Hoy la respuesta propuesta es no.
+5. **Tags en otro formato.** star lee y crea tags `v1.2.3`. Una app hecha puede
+   tener tags `1.2.3` o `app-v1.2.3`. ¿Se configura el prefijo, o se pide
+   migrar los tags al adoptar star? Se decide cuando aparezca una app así.

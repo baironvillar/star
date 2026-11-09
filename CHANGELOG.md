@@ -16,6 +16,9 @@ siguen [SemVer](https://semver.org/lang/es/).
   que la CI corra `star lint`, el remoto, la sesión de `gh` y llaves privadas
   commiteadas. Sale con error si hay algo que haría fallar una release o que
   filtra un secreto; los avisos no frenan.
+- `star init changelog`: crea un `CHANGELOG.md` con la sección
+  `## [Sin publicar]`, para una app que recién empieza. Si ya hay uno, no lo
+  toca.
 
 ## [0.2.0] - 2026-11-09
 

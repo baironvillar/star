@@ -97,3 +97,19 @@ la app guarda una línea por hook que llama a `bunx star hook`.
 - El hook local y la CI (`star lint`) corren el mismo código.
 
 El costo es que cada commit arranca Bun, unos 100 ms.
+
+## 14. Se adopta en una app hecha o desde cero
+
+star tiene que entrar igual en una app que ya existe (con historial, tags,
+hooks y CI propios) que en una que recién empieza. Cada pieza se piensa con los
+dos casos:
+
+- **No exige el pasado.** `star lint commits` revisa sólo los commits nuevos;
+  `doctor` pide notas sólo a la versión que ya tiene tag. Adoptar star no
+  convierte en error lo que ya estaba mergeado.
+- **No pisa lo que hay.** `init` pregunta antes de reemplazar un archivo con
+  otro contenido y no toca lo que es de la app (un `pre-commit` propio).
+- **Crea lo que falta.** En una app nueva, `init` escribe lo mínimo
+  (`CHANGELOG.md`, hooks) y `doctor` dice qué comando lo crea.
+- **Se salta lo que no aplica.** Sin `vite.config.ts` no hay tarea `release`
+  que revisar; sin `src-tauri/` no hay updater.

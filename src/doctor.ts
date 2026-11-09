@@ -58,6 +58,15 @@ function manifests(root: string): Finding[] {
 }
 
 function changelog(root: string, git: Git): Finding[] {
+  if (!existsSync(join(root, "CHANGELOG.md"))) {
+    return [
+      error(
+        "changelog",
+        "no hay un CHANGELOG.md: las notas de cada versión viven ahí",
+        "bunx star init changelog",
+      ),
+    ];
+  }
   const md = readChangelog(root);
   const version = currentVersion(inspect(root));
   const findings: Finding[] = [];
@@ -198,10 +207,22 @@ function scripts(root: string): Finding[] {
 
 function ci(root: string): Finding[] {
   const dir = join(root, ".github", "workflows");
-  if (!existsSync(dir)) return [];
-  const texts = readdirSync(dir)
-    .filter((f) => /\.ya?ml$/.test(f))
-    .map((f) => readFileSync(join(dir, f), "utf8"));
+  const texts = existsSync(dir)
+    ? readdirSync(dir)
+        .filter((f) => /\.ya?ml$/.test(f))
+        .map((f) => readFileSync(join(dir, f), "utf8"))
+    : [];
+  // Una app nueva todavía no tiene CI: se dice, porque sin ella los hooks son
+  // la única barrera y se saltan con --no-verify.
+  if (texts.length === 0) {
+    return [
+      warn(
+        "ci",
+        "no hay workflows en .github/workflows: nada revisa los PR",
+        "un workflow que corra la puerta, bunx star lint commits y bunx star lint branch",
+      ),
+    ];
+  }
   const findings: Finding[] = [];
   if (texts.some((t) => /\.githooks\/(?:commit-msg|pre-push)\b/.test(t))) {
     findings.push(
