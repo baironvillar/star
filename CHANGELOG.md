@@ -6,6 +6,20 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Agregado
+
+- `star doctor`: revisa la app y dice qué falta o está mal, y cómo arreglarlo.
+  Mira que los manifiestos coincidan, las notas de la versión publicada y la
+  sección `## [Sin publicar]`, la puerta, los hooks (instalados, con
+  `core.hooksPath` y ejecutables en git), que la tarea `release` de
+  `vite.config.ts` no tenga caché, los scripts que llaman a `star` sin `bunx`,
+  que la CI corra `star lint`, el remoto, la sesión de `gh` y llaves privadas
+  commiteadas. Sale con error si hay algo que haría fallar una release o que
+  filtra un secreto; los avisos no frenan.
+- `star init changelog`: crea un `CHANGELOG.md` con la sección
+  `## [Sin publicar]`, para una app que recién empieza. Si ya hay uno, no lo
+  toca.
+
 ## [0.2.0] - 2026-11-09
 
 ### Agregado

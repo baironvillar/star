@@ -74,6 +74,19 @@ export function today(now = new Date()): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/**
+ * El changelog de una app que recién empieza: sin versiones, con la sección
+ * donde se va anotando lo próximo.
+ */
+export const EMPTY_CHANGELOG = `# Changelog
+
+Los cambios que nota quien usa la app. El formato sigue
+[Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones
+siguen [SemVer](https://semver.org/lang/es/).
+
+## [Sin publicar]
+`;
+
 export function readChangelog(root: string): string {
   const path = join(root, "CHANGELOG.md");
   if (!existsSync(path)) {

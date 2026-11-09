@@ -28,6 +28,8 @@ export function fakeGit(overrides: Partial<Git> = {}): Git & { calls: string[] }
     getConfig: () => null,
     setConfig: record("setConfig"),
     addExecutable: record("addExecutable"),
+    indexModes: () => ({}),
+    trackedMatching: () => [],
     switchCreate: record("switchCreate"),
     switchTo: record("switchTo"),
     pullFastForward: record("pullFastForward"),

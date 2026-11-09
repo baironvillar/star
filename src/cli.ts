@@ -10,17 +10,19 @@
  *   star release [nivel]            prepara una versión: rama, bump, commit, push y PR
  *   star release finish [versión]   la mergea con el asunto exacto y empuja el tag
  *   star init hooks                 instala commit-msg y pre-push en .githooks
+ *   star init changelog             crea un CHANGELOG.md vacío, si no hay uno
  *   star hook <nombre> [args]       lo que corre un hook de git (no se llama a mano)
  *   star lint commits [rango]       revisa los mensajes de commit (CI)
  *   star lint branch <rama>         revisa el nombre de una rama (CI)
+ *   star doctor                     qué falta o está mal en la app
  *
  * `--yes` (o STAR_YES=1) contesta que sí cuando no hay terminal donde preguntar.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import pkg from "../package.json" with { type: "json" };
-import { changelogSection, readChangelog, today } from "./changelog.ts";
+import { changelogSection, EMPTY_CHANGELOG, readChangelog, today } from "./changelog.ts";
 import { readConfig } from "./config.ts";
 import {
   BRANCH_HELP,
@@ -33,6 +35,7 @@ import {
 } from "./conventions.ts";
 import { StarError } from "./errors.ts";
 import { ghIn } from "./gh.ts";
+import { diagnose } from "./doctor.ts";
 import { gitIn } from "./git.ts";
 import { HOOKS_DIR, inspectHooks, installHooks, lintCommits } from "./hooks.ts";
 import { hasOwnVersion } from "./manifests/types.ts";
@@ -63,9 +66,11 @@ Uso:
                                asunto, actualiza develop y empuja el tag
   star init hooks              instala commit-msg y pre-push en .githooks y
                                apunta git ahí (core.hooksPath)
+  star init changelog          crea un CHANGELOG.md con "## [Sin publicar]"
   star lint commits [rango]    revisa los mensajes de base..head, o de un commit
   star lint branch <rama>      revisa el nombre de una rama; con --into <base>,
                                también hacia dónde va el pull request
+  star doctor                  qué falta o está mal en la app, y cómo arreglarlo
 
 Opciones:
   --yes                        contesta que sí cuando no hay terminal (o STAR_YES=1)
@@ -292,6 +297,17 @@ async function initHooks(root: string, yes: boolean) {
   console.log("  Los hooks quedaron en el stage, como ejecutables: si cambiaron, commitéalos.");
 }
 
+function initChangelog(root: string) {
+  const path = join(root, "CHANGELOG.md");
+  // Un changelog que ya existe tiene la historia de la app: nunca se pisa.
+  if (existsSync(path)) {
+    console.log("✓ Ya hay un CHANGELOG.md; no se tocó.");
+    return;
+  }
+  writeFileSync(path, EMPTY_CHANGELOG);
+  console.log('✓ CHANGELOG.md creado. Anota lo próximo en "## [Sin publicar]".');
+}
+
 function failSubject(subject: string, reason: string): never {
   throw new StarError(
     `El mensaje de commit no cumple la convención: ${reason}.\n\n  asunto: "${subject}"\n\n${SUBJECT_HELP}`,
@@ -363,6 +379,22 @@ function lint(root: string, what: string | undefined, arg: string | undefined, i
   }
 }
 
+function doctor(root: string) {
+  const findings = diagnose({ root, git: gitIn(root), gh: ghIn(root) });
+  const width = Math.max(...findings.map((f) => f.area.length));
+  const mark = { ok: "✓", warn: "!", error: "✗" };
+  for (const f of findings) {
+    console.log(`  ${mark[f.level]} ${f.area.padEnd(width)}  ${f.message}`);
+    if (f.fix && f.level !== "ok") console.log(`    ${" ".repeat(width)}  → ${f.fix}`);
+  }
+  const errors = findings.filter((f) => f.level === "error").length;
+  const warnings = findings.filter((f) => f.level === "warn").length;
+  if (errors > 0) {
+    throw new StarError(`${errors} problema(s) y ${warnings} aviso(s).`);
+  }
+  console.log(warnings > 0 ? `\n! ${warnings} aviso(s), nada que frene.` : "\n✓ Todo en orden.");
+}
+
 /** Saca `--opcion valor` de los argumentos y devuelve el valor. */
 function takeOption(args: string[], name: string): string | undefined {
   const i = args.indexOf(name);
@@ -411,14 +443,15 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
     case "release":
       return release(root, sub, arg, yes);
     case "init":
-      if (sub !== "hooks") {
-        throw new StarError(`"init ${sub ?? ""}" no existe. Por ahora: init hooks.`);
-      }
-      return initHooks(root, yes);
+      if (sub === "hooks") return initHooks(root, yes);
+      if (sub === "changelog") return initChangelog(root);
+      throw new StarError(`"init ${sub ?? ""}" no existe. Usa init hooks o init changelog.`);
     case "hook":
       return hook(root, sub, arg);
     case "lint":
       return lint(root, sub, arg, into);
+    case "doctor":
+      return doctor(root);
     default:
       throw new StarError(`"${command}" no es un comando. Mira \`star --help\`.`);
   }
