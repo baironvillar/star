@@ -46,19 +46,32 @@ export function inspectHooks(root: string): HookState[] {
  *
  * Se ponen en el stage como ejecutables porque Windows no guarda el bit: sin
  * eso llegan al índice como 644, y en un clon de Linux o macOS git los ignora
- * con un aviso que nadie lee.
+ * con un aviso que nadie lee. También los que ya estaban al día: un hook con
+ * el contenido correcto pero 644 en el índice no corre en Linux.
+ *
+ * En Windows, además, apaga `core.filemode` si está prendido. El disco no
+ * guarda el bit, así que git ve cada hook "cambiado" a 644, y el siguiente
+ * `git add -A` deshace el `--chmod`. Pasó al adoptarlo en flotas.
+ *
+ * Devuelve si tuvo que apagar `core.filemode`.
  */
-export function installHooks(root: string, git: Git, hooks: HookState[]): void {
+export function installHooks(
+  root: string,
+  git: Git,
+  hooks: HookState[],
+  platform: string = process.platform,
+): { fileModeOff: boolean } {
   mkdirSync(join(root, HOOKS_DIR), { recursive: true });
-  const written: string[] = [];
   for (const hook of hooks) {
     if (hook.state === "same") continue;
     writeFileSync(hook.path, hookScript(hook.name));
     chmodSync(hook.path, 0o755);
-    written.push(`${HOOKS_DIR}/${hook.name}`);
   }
-  if (written.length > 0) git.addExecutable(written);
+  const fileModeOff = platform === "win32" && git.getConfig("core.filemode") === "true";
+  if (fileModeOff) git.setConfig("core.filemode", "false");
+  git.addExecutable(hooks.map((h) => `${HOOKS_DIR}/${h.name}`));
   if (git.getConfig("core.hooksPath") !== HOOKS_DIR) git.setConfig("core.hooksPath", HOOKS_DIR);
+  return { fileModeOff };
 }
 
 export type CommitResult = { sha: string; subject: string; verdict: Verdict };

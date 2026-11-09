@@ -12,7 +12,9 @@ siguen [SemVer](https://semver.org/lang/es/).
   `.githooks`, como una línea que llama a star, y apunta git ahí
   (`core.hooksPath`). Si ya había hooks con otro contenido, pregunta antes de
   reemplazarlos, y no toca los demás hooks de la app (como un `pre-commit`).
-  Los deja en el stage como ejecutables, también desde Windows.
+  Los deja en el stage como ejecutables, también desde Windows, donde además
+  apaga `core.filemode` si está prendido (si no, el siguiente `git add -A`
+  los devuelve a 644).
 - Los hooks revisan la convención: el asunto de un commit es
   `tipo(scope): asunto` (en minúscula, sin punto, hasta 72 caracteres) o la
   versión sola; una rama es `tipo/descripcion-corta` o `release/<versión>`, y

@@ -130,7 +130,9 @@ exec bunx star hook commit-msg "$@"
   `vp staged`), y los hooks quedan en el repo donde se ven.
 - **Se ponen en el stage como ejecutables** (`git add --chmod=+x`). Windows no
   guarda el bit en el disco; sin esto llegan al índice como 644, y en un clon
-  de Linux o macOS git los ignora con un aviso.
+  de Linux o macOS git los ignora con un aviso. En Windows, además, se apaga
+  `core.filemode` si está prendido: con el disco sin el bit, git vería los
+  hooks cambiados a 644 y un `git add -A` desharía el `--chmod`.
 - **La regla no es configurable todavía.** Los tipos, el largo y las ramas
   protegidas son los de flotas y Starless. La base protegida sale de
   `"star": { "base" }`. Ver la pregunta abierta en [`alcance.md`](alcance.md).

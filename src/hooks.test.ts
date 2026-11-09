@@ -106,6 +106,33 @@ describe("hooks con git de verdad", { timeout: 60_000 }, () => {
     expect(readFileSync(join(dir, ".githooks", "pre-commit"), "utf8")).toContain("vp staged");
   });
 
+  it("en Windows apaga core.filemode, para que un `git add -A` no deshaga el bit", () => {
+    const dir = repo();
+    git(dir, "config", "core.filemode", "true");
+    expect(installHooks(dir, gitIn(dir), inspectHooks(dir), "win32")).toEqual({
+      fileModeOff: true,
+    });
+    expect(git(dir, "config", "core.filemode")).toBe("false");
+    git(dir, "add", "-A");
+    expect(git(dir, "ls-files", "-s", ".githooks/pre-push")).toMatch(/^100755 /);
+
+    const other = repo();
+    git(other, "config", "core.filemode", "true");
+    expect(installHooks(other, gitIn(other), inspectHooks(other), "linux").fileModeOff).toBe(false);
+    expect(git(other, "config", "core.filemode")).toBe("true");
+  });
+
+  it("un hook al día pero 644 en el índice queda ejecutable", () => {
+    const dir = repo();
+    mkdirSync(join(dir, ".githooks"));
+    for (const name of ["commit-msg", "pre-push"] as const) {
+      writeFileSync(join(dir, ".githooks", name), hookScript(name));
+    }
+    git(dir, "add", "--chmod=-x", ".githooks");
+    installHooks(dir, gitIn(dir), inspectHooks(dir));
+    expect(git(dir, "ls-files", "-s", ".githooks/commit-msg")).toMatch(/^100755 /);
+  });
+
   it("un hook con CRLF de un checkout en Windows cuenta como al día", () => {
     const dir = repo();
     mkdirSync(join(dir, ".githooks"));
