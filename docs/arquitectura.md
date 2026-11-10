@@ -66,6 +66,10 @@ vp run release minor     # desde develop
 vp run release finish    # cuando el CI del PR pasa
 ```
 
+Para una beta, `vp run release minor --beta` (`0.7.0-beta.1`) y después
+`vp run release beta` (`0.7.0-beta.2`). `vp run release minor` saca la `0.7.0`.
+Ver la decisión 16.
+
 **`star release <nivel>`**, desde `develop`:
 
 1. Chequea: estar en `develop` al día con `origin` y sin commits propios, sin
@@ -163,9 +167,20 @@ tag v* ──► verify.yml ──► web-release.yml    (app web: + jobs propio
 - **`verify.yml`:** corre `star verify` en el tag: el commit se llama como la
   versión, el tag coincide con los manifiestos, existen las notas, pasa la
   puerta. Devuelve `version` y sube las notas como artefacto.
-- **`tauri-release.yml`:** matriz Windows y Linux con `tauri-action` v1, que
-  compila, firma, crea la release y junta las plataformas en `latest.json`.
-  Después, un job verifica la release en borrador.
+- **`tauri-release.yml`:** tres jobs.
+  1. `draft` crea la release en borrador una sola vez, con las notas del
+     CHANGELOG. Si cada plataforma de la matriz la creara, competirían.
+  2. `build` es una matriz (Windows en `windows-latest`, Linux en
+     `ubuntu-22.04` por la glibc del AppImage) con `tauri-action` v1. Compila,
+     firma, sube instaladores y `.sig`, y agrega su plataforma a `latest.json`.
+  3. `check` corre `star release check`: cada plataforma pedida está en
+     `latest.json`, apunta a un archivo de la release, su firma es la del `.sig`
+     y las notas son las del CHANGELOG.
+
+  macOS se rechaza con un error que dice por qué. Una versión con sufijo
+  (`0.7.0-beta.1`) sale como prerelease (decisión 16). Lo propio de la app
+  (variables de la build, `--config`) entra por `build-env` y `args`.
+
 - **`web-release.yml`:** crea la release en borrador con las notas y los assets
   que la app subió como artefactos del workflow, y revisa que haya quedado en
   borrador, en el tag correcto y con todos los archivos. No hace checkout ni

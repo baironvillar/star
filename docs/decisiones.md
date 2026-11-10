@@ -125,3 +125,21 @@ workflow (`job_workflow_sha`). Usa el que la app tiene instalado (`bunx star`):
 
 El costo es que el workflow y el paquete pueden quedar en versiones distintas.
 `doctor` lo avisa, y la regla es subir los dos juntos.
+
+## 16. El canal de prueba es un sufijo en la versión
+
+Starless marcaba prerelease todo tag que no había llegado a `main`. star
+etiqueta en `develop` y `develop` llega a `main` después, así que con esa
+regla toda versión habría salido como prerelease.
+
+El canal lo dice la versión: `0.7.0-beta.1` es una prerelease y `0.7.0` es
+pública. GitHub no devuelve una prerelease en `releases/latest`, que es lo que
+lee el updater, así que la app instalada no ve las betas. No depende de en qué
+rama quedó el tag, y se lee en el número.
+
+- `star release minor --beta` empieza una beta, `star release beta` saca la
+  siguiente y `star release minor` saca la versión final.
+- **Una beta copia `## [Sin publicar]`, no lo mueve.** Lo que trae sigue sin
+  publicar hasta la versión final, que sale con todas sus notas.
+- `verify.yml` devuelve `prerelease` para lo que la app decida por su cuenta
+  (Starless: el ícono de desarrollo y el canal que muestra en Ajustes).

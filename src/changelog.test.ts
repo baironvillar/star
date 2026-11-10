@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { changelogSection, promoteUnreleased, today } from "./changelog.ts";
+import { changelogSection, copyUnreleased, promoteUnreleased, today } from "./changelog.ts";
 
 const CHANGELOG = `# Changelog
 
@@ -89,5 +89,34 @@ describe("promoteUnreleased", () => {
 describe("today", () => {
   it("usa la fecha local", () => {
     expect(today(new Date(2026, 0, 5, 23, 30))).toBe("2026-01-05");
+  });
+});
+
+describe("copyUnreleased", () => {
+  const md =
+    "# Changelog\n\n## [Sin publicar]\n\n- Algo nuevo.\n\n## [0.6.0] - 2026-11-01\n\n- Antes.\n";
+
+  it("copia lo sin publicar a la beta y lo deja para la versión final", () => {
+    const beta = copyUnreleased(md, "0.7.0-beta.1", "2026-11-10");
+    expect(beta).toBe(
+      "# Changelog\n\n## [Sin publicar]\n\n- Algo nuevo.\n\n## [0.7.0-beta.1] - 2026-11-10\n\n- Algo nuevo.\n\n## [0.6.0] - 2026-11-01\n\n- Antes.\n",
+    );
+    // La versión final se lleva todo lo de las betas.
+    const final = promoteUnreleased(beta ?? "", "0.7.0", "2026-11-20") ?? "";
+    expect(changelogSection(final, "0.7.0")).toBe("- Algo nuevo.");
+    expect(changelogSection(final, "0.7.0-beta.1")).toBe("- Algo nuevo.");
+  });
+
+  it("al final del archivo y con CRLF", () => {
+    const crlf = "# C\r\n\r\n## [Sin publicar]\r\n\r\n- Uno.\r\n";
+    expect(copyUnreleased(crlf, "0.1.0-beta.1", "2026-11-10")).toBe(
+      "# C\r\n\r\n## [Sin publicar]\r\n\r\n- Uno.\r\n\r\n## [0.1.0-beta.1] - 2026-11-10\r\n\r\n- Uno.\r\n",
+    );
+  });
+
+  it("sin nada sin publicar no hay beta", () => {
+    expect(
+      copyUnreleased("# C\n\n## [Sin publicar]\n\n## [0.6.0]\n\n- x\n", "0.7.0-beta.1", "d"),
+    ).toBeNull();
   });
 });

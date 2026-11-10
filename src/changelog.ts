@@ -25,16 +25,17 @@ export function changelogSection(markdown: string, version: string): string | nu
 }
 
 /** Lo que va después del encabezado `start`, hasta donde termina la sección. */
+/** Lo que corta una sección: otro encabezado, una regla o las referencias de links. */
+function endsSection(line: string): boolean {
+  return (
+    /^#{1,2}[ \t]/.test(line) || /^-{3,}[ \t]*$/.test(line) || /^\[[^\]]+\]:[ \t]+\S/.test(line)
+  );
+}
+
 function sectionBody(lines: string[], start: number): string | null {
   const body: string[] = [];
   for (const line of lines.slice(start + 1)) {
-    if (
-      /^#{1,2}[ \t]/.test(line) ||
-      /^-{3,}[ \t]*$/.test(line) ||
-      /^\[[^\]]+\]:[ \t]+\S/.test(line)
-    ) {
-      break;
-    }
+    if (endsSection(line)) break;
     body.push(line);
   }
   const text = body.join("\n").trim();
@@ -66,6 +67,40 @@ export function promoteUnreleased(markdown: string, version: string, date: strin
     ...lines.slice(start + 1),
   ];
   return promoted.join(eol);
+}
+
+/**
+ * Las notas de una beta: una copia de lo que hay en `## [Sin publicar]`, que
+ * se queda donde está.
+ *
+ * **Copia, no mueve.** Lo que trae una beta sigue sin publicar hasta que sale
+ * la versión de verdad, y sus notas tienen que estar enteras en ese momento.
+ * Si la beta se las llevara, la `0.7.0` saldría sin nada que contar.
+ *
+ * Devuelve `null` si no hay nada sin publicar.
+ */
+export function copyUnreleased(markdown: string, version: string, date: string): string | null {
+  const eol = markdown.includes("\r\n") ? "\r\n" : "\n";
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const start = lines.findIndex((line) => UNRELEASED.test(line));
+  if (start < 0) return null;
+  const body = sectionBody(lines, start);
+  if (body === null) return null;
+  // Donde termina lo sin publicar: el mismo corte que usa `sectionBody`.
+  let end = start + 1;
+  while (end < lines.length && !endsSection(lines[end] ?? "")) end++;
+  // Sin las líneas en blanco del final, para dejar una sola entre secciones.
+  let last = end;
+  while (last > start + 1 && (lines[last - 1] ?? "").trim() === "") last--;
+  const copied = [
+    ...lines.slice(0, last),
+    "",
+    `## [${version}] - ${date}`,
+    "",
+    body,
+    ...(end < lines.length ? ["", ...lines.slice(end)] : [""]),
+  ];
+  return copied.join(eol);
 }
 
 /** La fecha de hoy en la hora de la máquina: la release sale el día que se ve en el reloj. */

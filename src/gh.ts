@@ -21,6 +21,10 @@ export type Gh = {
   findPr(head: string): PullRequest | null;
   /** Squash and merge con el asunto exacto y sin cuerpo. */
   mergeSquash(number: number, subject: string): void;
+  /** Los assets de la release de ese tag, también si es un borrador. */
+  releaseAssets(tag: string): { id: number; name: string }[];
+  /** El contenido de un asset como texto, o `null` si no está. */
+  downloadAsset(tag: string, name: string): string | null;
 };
 
 type Rollup = { status?: string; conclusion?: string; state?: string };
@@ -117,6 +121,23 @@ export function ghIn(cwd: string): Gh {
         "",
       ]);
       if (r.status !== 0) throw new StarError(`gh no pudo mergear el PR #${number}:\n${r.err}`);
+    },
+    releaseAssets(tag) {
+      // `gh release view` encuentra los borradores; la API por tag no.
+      const r = run(["release", "view", tag, "--json", "assets"]);
+      if (r.status !== 0) throw new StarError(`gh no encontró la release ${tag}:\n${r.err}`);
+      const { assets } = JSON.parse(r.out) as { assets: { apiUrl: string; name: string }[] };
+      return assets.map((a) => ({
+        id: Number(/\/assets\/(\d+)/.exec(a.apiUrl)?.[1] ?? Number.NaN),
+        name: a.name,
+      }));
+    },
+    downloadAsset(tag, name) {
+      // `-p` es un glob: los corchetes de un nombre se escapan para que calce
+      // sólo ese archivo.
+      const pattern = name.replace(/[[\]*?]/g, (c) => `[${c}]`);
+      const r = run(["release", "download", tag, "-p", pattern, "-O", "-"]);
+      return r.status === 0 ? r.out : null;
     },
   };
 }
