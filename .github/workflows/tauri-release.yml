@@ -1,0 +1,242 @@
+name: tauri-release
+
+# Reutilizable: la release en borrador de una app de escritorio con Tauri 2,
+# compilada y firmada por tauri-action v1 en Windows y Linux. Va después de
+# verify.yml:
+#
+#   jobs:
+#     verify:
+#       uses: baironvillar/star/.github/workflows/verify.yml@v0.4.0
+#       with:
+#         rust: true
+#     release:
+#       needs: verify
+#       permissions:
+#         contents: write
+#       uses: baironvillar/star/.github/workflows/tauri-release.yml@v0.4.0
+#       with:
+#         version: ${{ needs.verify.outputs.version }}
+#         platforms: windows,linux
+#       secrets:
+#         TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+#         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+#
+# macOS todavía no: firmar y notarizar va en la fase 3 (ver el README).
+#
+# No se reinventa nada: tauri-action compila, firma, sube los instaladores, los
+# `.sig` y arma `latest.json`. El kit pone lo de alrededor: crear la release
+# una sola vez antes de la matriz (si no, cada plataforma compite por crearla),
+# las notas del CHANGELOG, y revisar al final que `latest.json` sirva.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: La versión, sin la v. Sale de verify.yml.
+        type: string
+        required: true
+      platforms:
+        description: Dónde se compila, separado por comas. windows, linux o las dos.
+        type: string
+        default: windows,linux
+      prerelease:
+        description: Marcar la release como prerelease. `releases/latest` no apunta a una, así que la app instalada no la ve.
+        type: boolean
+        default: false
+      title:
+        description: El título de la release. Vacío, la versión.
+        type: string
+        default: ""
+      args:
+        description: Argumentos extra para `tauri build` (por ejemplo `--config otra.json`).
+        type: string
+        default: ""
+      asset-name-pattern:
+        description: El releaseAssetNamePattern de tauri-action. Vacío, el de la acción.
+        type: string
+        default: ""
+      tauri-script:
+        description: Cómo se llama a la CLI de Tauri.
+        type: string
+        default: bun tauri
+      build-env:
+        description: Variables para la build, una por línea (CLAVE=valor). No van secretos acá.
+        type: string
+        default: ""
+      star:
+        description: Cómo llamar a star. Sólo el propio kit lo cambia.
+        type: string
+        default: bunx star
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        description: La llave privada del updater. Sin ella, no hay latest.json que la app acepte.
+        required: true
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
+    outputs:
+      release-url:
+        description: La página de la release en borrador.
+        value: ${{ jobs.draft.outputs.url }}
+
+jobs:
+  draft:
+    name: Crear la release en borrador
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      matrix: ${{ steps.platforms.outputs.matrix }}
+      url: ${{ steps.release.outputs.url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      # Linux en 22.04: un AppImage enlaza contra la glibc del runner, y uno
+      # hecho en un Ubuntu nuevo no abre en distribuciones más viejas.
+      - name: Plataformas
+        id: platforms
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          include=""
+          for p in $(printf '%s' "$PLATFORMS" | tr ',' ' '); do
+            case "$p" in
+              windows) runner=windows-latest ;;
+              linux) runner=ubuntu-22.04 ;;
+              macos)
+                echo "::error::macOS todavía no está en el kit: firmar y notarizar va en la fase 3."
+                exit 1 ;;
+              *)
+                echo "::error::'$p' no es una plataforma. Usa windows, linux o las dos."
+                exit 1 ;;
+            esac
+            include="$include{\"platform\":\"$p\",\"runner\":\"$runner\"},"
+          done
+          [ -n "$include" ] || { echo "::error::No hay plataformas."; exit 1; }
+          echo "matrix={\"include\":[${include%,}]}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      # Una corrida repetida encuentra su propio borrador y lo reusa. Una
+      # release ya publicada no se toca: se saca una versión nueva.
+      - name: Release en borrador
+        id: release
+        env:
+          TITLE: ${{ inputs.title || inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          if gh release view "$TAG" --json isDraft --jq .isDraft > draft.txt 2>/dev/null; then
+            [ "$(cat draft.txt)" = "true" ] || {
+              echo "::error::La release $TAG ya está publicada. Saca una versión nueva."
+              exit 1
+            }
+            echo "La release $TAG ya existe en borrador: se reusa."
+          else
+            flags="--draft --verify-tag"
+            [ "$PRERELEASE" = "true" ] && flags="$flags --prerelease"
+            # shellcheck disable=SC2086
+            gh release create "$TAG" $flags --title "$TITLE" --notes-file release-notes.md
+          fi
+          echo "url=$(gh release view "$TAG" --json url --jq .url)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Compilar (${{ matrix.platform }})
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.draft.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      # Las que pide tauri-action para Linux (ver su README).
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - run: bun install --frozen-lockfile
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      # Las notas van a tauri-action, que las escribe en `latest.json` (las que
+      # muestra el diálogo de actualización) y en la release.
+      - name: Notas y variables de la build
+        id: notes
+        env:
+          BUILD_ENV: ${{ inputs.build-env }}
+        run: |
+          {
+            echo "body<<STAR_NOTES_EOF"
+            cat release-notes.md
+            echo "STAR_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$BUILD_ENV" | while IFS= read -r line; do
+            [ -n "$line" ] && printf '%s\n' "$line" >> "$GITHUB_ENV"
+          done
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          # El tag además del borrador: sin él, las URLs de latest.json apuntan
+          # a `releases/latest/download/…`, que puede ser otra release.
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ inputs.title || inputs.version }}
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: true
+          prerelease: ${{ inputs.prerelease }}
+          # `releaseBody` se antepondría a lo que genera GitHub: las notas son
+          # las del CHANGELOG y nada más.
+          generateReleaseNotes: false
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
+          tauriScript: ${{ inputs.tauri-script }}
+          args: ${{ inputs.args }}
+          releaseAssetNamePattern: ${{ inputs.asset-name-pattern }}
+
+  check:
+    name: Revisar latest.json
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      # La release queda en borrador, así que este es el último paso que la
+      # puede frenar: cada plataforma en latest.json, apuntando a un archivo de
+      # la release, con la firma de su `.sig` y las notas del CHANGELOG.
+      - run: ${{ inputs.star }} release check "$GITHUB_REF_NAME" --platforms "$PLATFORMS"
+        env:
+          PLATFORMS: ${{ inputs.platforms }}

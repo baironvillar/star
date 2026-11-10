@@ -163,9 +163,19 @@ tag v* ──► verify.yml ──► web-release.yml    (app web: + jobs propio
 - **`verify.yml`:** corre `star verify` en el tag: el commit se llama como la
   versión, el tag coincide con los manifiestos, existen las notas, pasa la
   puerta. Devuelve `version` y sube las notas como artefacto.
-- **`tauri-release.yml`:** matriz Windows y Linux con `tauri-action` v1, que
-  compila, firma, crea la release y junta las plataformas en `latest.json`.
-  Después, un job verifica la release en borrador.
+- **`tauri-release.yml`:** tres jobs.
+  1. `draft` crea la release en borrador una sola vez, con las notas del
+     CHANGELOG. Si cada plataforma de la matriz la creara, competirían.
+  2. `build` es una matriz (Windows en `windows-latest`, Linux en
+     `ubuntu-22.04` por la glibc del AppImage) con `tauri-action` v1. Compila,
+     firma, sube instaladores y `.sig`, y agrega su plataforma a `latest.json`.
+  3. `check` corre `star release check`: cada plataforma pedida está en
+     `latest.json`, apunta a un archivo de la release, su firma es la del `.sig`
+     y las notas son las del CHANGELOG.
+
+  macOS se rechaza con un error que dice por qué. Lo propio de la app (canal,
+  variables de la build, `--config`) entra por `prerelease`, `build-env` y
+  `args`.
 - **`web-release.yml`:** crea la release en borrador con las notas y los assets
   que la app subió como artefactos del workflow, y revisa que haya quedado en
   borrador, en el tag correcto y con todos los archivos. No hace checkout ni

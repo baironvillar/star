@@ -15,6 +15,8 @@ const gh = (available = true): Gh => ({
   createPr: () => "",
   findPr: () => null,
   mergeSquash: () => {},
+  releaseAssets: () => [],
+  downloadAsset: () => null,
 });
 
 /** Una app en orden: la que deja star después de adoptarlo entero. */

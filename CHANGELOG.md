@@ -6,6 +6,18 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Agregado
+
+- Workflow reutilizable `tauri-release.yml` para apps de escritorio con
+  Tauri 2: crea la release en borrador con las notas del CHANGELOG, compila y
+  firma con `tauri-action` v1 en Windows y Linux, y revisa `latest.json`. macOS
+  todavía no.
+- `star release check <tag> [--platforms windows,linux]`: revisa que
+  `latest.json` tenga cada plataforma, que apunte a archivos de la release, que
+  cada firma sea la de su `.sig` y que las notas sean las del CHANGELOG.
+- `verify.yml` acepta `runs-on` y `rust`, para la puerta de una app de
+  escritorio que corre `cargo test`.
+
 ## [0.3.0] - 2026-11-09
 
 ### Agregado

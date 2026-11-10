@@ -107,3 +107,9 @@ Para discutir. Cuando se decida una, se mueve a [`decisiones.md`](decisiones.md)
 5. **Tags en otro formato.** star lee y crea tags `v1.2.3`. Una app hecha puede
    tener tags `1.2.3` o `app-v1.2.3`. ¿Se configura el prefijo, o se pide
    migrar los tags al adoptar star? Se decide cuando aparezca una app así.
+6. **El canal de Starless y el flujo de star.** Starless marca prerelease todo
+   tag que no llegó a `main`. star etiqueta en `develop` (`release finish`), y
+   `develop` llega a `main` después, así que con esa regla toda versión saldría
+   como prerelease. ¿Starless etiqueta después del merge a `main`, el canal
+   pasa a decidirse por otra cosa (un sufijo `-beta`), o star aprende a
+   etiquetar `main`? Hay que decidirlo antes de migrar Starless (paso 9).

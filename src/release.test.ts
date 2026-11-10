@@ -160,6 +160,8 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
       mergeSquash: () => {
         throw new Error("en este test el PR ya viene mergeado");
       },
+      releaseAssets: () => [],
+      downloadAsset: () => null,
     };
     return {
       root: work,
