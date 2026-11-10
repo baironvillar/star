@@ -92,10 +92,7 @@ que el kit cobre todos esos chequeos sin que cada app los copie.
 
 Para discutir. Cuando se decida una, se mueve a [`decisiones.md`](decisiones.md).
 
-1. **Respaldo de la llave del updater.** Si la llave privada sólo vive en los
-   secretos de GitHub y se pierde, todas las instalaciones quedan sin
-   actualizaciones para siempre. ¿`init` exige elegir dónde guardar un respaldo
-   (ruta fuera del repo, gestor de contraseñas)?
+1. ~~Respaldo de la llave del updater.~~ Decidido: ver la decisión 17.
 2. **Release en borrador o publicada.** Starless deja la release en borrador y
    se publica a mano. ¿El kit agrega un `star publish` que verifica y la saca
    de borrador, o se sigue publicando a mano?

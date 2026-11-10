@@ -162,6 +162,8 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
       },
       releaseAssets: () => [],
       downloadAsset: () => null,
+      secretNames: () => [],
+      setSecret: () => {},
     };
     return {
       root: work,

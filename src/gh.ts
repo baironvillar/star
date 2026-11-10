@@ -25,6 +25,10 @@ export type Gh = {
   releaseAssets(tag: string): { id: number; name: string }[];
   /** El contenido de un asset como texto, o `null` si no está. */
   downloadAsset(tag: string, name: string): string | null;
+  /** Los nombres de los secretos del repo (nunca los valores), o `null` si no se pudo preguntar. */
+  secretNames(): string[] | null;
+  /** Guarda un secreto del repo. El valor va por stdin: nunca en argv ni en pantalla. */
+  setSecret(name: string, value: string): void;
 };
 
 type Rollup = { status?: string; conclusion?: string; state?: string };
@@ -131,6 +135,18 @@ export function ghIn(cwd: string): Gh {
         id: Number(/\/assets\/(\d+)/.exec(a.apiUrl)?.[1] ?? Number.NaN),
         name: a.name,
       }));
+    },
+    secretNames() {
+      const r = run(["secret", "list", "--json", "name"]);
+      if (r.status !== 0) return null;
+      return (JSON.parse(r.out || "[]") as { name: string }[]).map((s) => s.name);
+    },
+    setSecret(name, value) {
+      // Sin `--body`: gh lee el valor de stdin. En argv lo vería cualquier
+      // proceso de la máquina, y quedaría en el historial de la terminal.
+      const r = run(["secret", "set", name], value);
+      // El error de gh no trae el valor; igual no se muestra stdout.
+      if (r.status !== 0) throw new StarError(`gh no pudo guardar el secreto ${name}:\n${r.err}`);
     },
     downloadAsset(tag, name) {
       // `-p` es un glob: los corchetes de un nombre se escapan para que calce

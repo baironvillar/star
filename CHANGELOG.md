@@ -8,6 +8,18 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ### Agregado
 
+- `star init updater`: para una app de Tauri, genera la llave del updater (sin
+  contraseña) con un respaldo en `~/.star/keys/<identifier>/`, la sube como
+  secreto `TAURI_SIGNING_PRIVATE_KEY` y escribe la llave pública en
+  `tauri.conf.json`. La llave no aparece nunca en pantalla ni en la línea de
+  comandos. Si la app ya tiene llave, no genera otra: revisa que esté todo, sube
+  el respaldo si falta el secreto, y con `--import <ruta>` trae una llave que ya
+  existía.
+- `star doctor` revisa el updater de una app de escritorio: la llave pública,
+  el secreto (sólo su nombre), el respaldo y `createUpdaterArtifacts`.
+
+### Agregado
+
 - Workflow reutilizable `tauri-release.yml` para apps de escritorio con
   Tauri 2: crea la release en borrador con las notas del CHANGELOG, compila y
   firma con `tauri-action` v1 en Windows y Linux, y revisa `latest.json`. macOS

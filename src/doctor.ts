@@ -6,6 +6,7 @@ import { StarError } from "./errors.ts";
 import type { Gh } from "./gh.ts";
 import type { Git } from "./git.ts";
 import { HOOK_NAMES, HOOKS_DIR, inspectHooks } from "./hooks.ts";
+import { inspectUpdater, planUpdater, PRIVATE_SECRET } from "./updater-init.ts";
 import { currentVersion, disagreements, inspect } from "./version.ts";
 
 /**
@@ -323,6 +324,48 @@ function secrets(git: Git): Finding[] {
     : [ok("secretos", "ninguna llave privada commiteada")];
 }
 
+/**
+ * El updater de una app de escritorio. Se salta en una app web. De los
+ * secretos de GitHub se mira sólo el nombre: el valor no se puede leer, y no
+ * habría por qué.
+ */
+function updater(root: string, gh: Gh): Finding[] {
+  const state = inspectUpdater(root, gh);
+  if (!state) return [];
+  const findings: Finding[] = [];
+  if (!state.createsArtifacts) {
+    findings.push(
+      error(
+        "updater",
+        '"bundle.createUpdaterArtifacts" no es true: la release sale sin .sig ni latest.json',
+        'agrega "createUpdaterArtifacts": true en "bundle" de tauri.conf.json',
+      ),
+    );
+  }
+  const plan = planUpdater(state);
+  switch (plan.action) {
+    case "blocked":
+      findings.push(error("updater", plan.reason));
+      break;
+    case "generate":
+      findings.push(
+        error("updater", "la app no tiene llave del updater", "bunx star init updater"),
+      );
+      break;
+    case "upload":
+      findings.push(
+        error("updater", `el repo no tiene el secreto ${PRIVATE_SECRET}`, "bunx star init updater"),
+      );
+      break;
+    case "ready":
+      for (const w of plan.warnings) findings.push(warn("updater", w));
+      if (plan.warnings.length === 0) {
+        findings.push(ok("updater", `llave pública, ${PRIVATE_SECRET} y respaldo en orden`));
+      }
+  }
+  return findings;
+}
+
 export function diagnose({ root, git, gh }: DoctorDeps): Finding[] {
   // Todo lo demás lee el package.json: sin él no hay una app que revisar.
   if (!existsSync(join(root, "package.json"))) {
@@ -337,6 +380,7 @@ export function diagnose({ root, git, gh }: DoctorDeps): Finding[] {
     ...guard("scripts", () => scripts(root)),
     ...guard("ci", () => ci(root)),
     ...guard("github", () => remote(git, gh, root)),
+    ...guard("updater", () => updater(root, gh)),
     ...guard("secretos", () => secrets(git)),
   ];
 }
