@@ -176,6 +176,7 @@ tag v* ──► verify.yml ──► web-release.yml    (app web: + jobs propio
   macOS se rechaza con un error que dice por qué. Lo propio de la app (canal,
   variables de la build, `--config`) entra por `prerelease`, `build-env` y
   `args`.
+
 - **`web-release.yml`:** crea la release en borrador con las notas y los assets
   que la app subió como artefactos del workflow, y revisa que haya quedado en
   borrador, en el tag correcto y con todos los archivos. No hace checkout ni
