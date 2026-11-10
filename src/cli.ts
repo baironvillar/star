@@ -8,6 +8,8 @@
  *   star version tag <tag>          falla si el tag no coincide con la versión (CI)
  *   star notes [versión]            la sección del CHANGELOG de esa versión
  *   star release [nivel]            prepara una versión: rama, bump, commit, push y PR
+ *   star release <nivel> --beta     empieza una beta (0.7.0-beta.1), que sale como prerelease
+ *   star release beta               la beta siguiente (0.7.0-beta.2)
  *   star release finish [versión]   la mergea con el asunto exacto y empuja el tag
  *   star release check <tag>        revisa latest.json y las firmas de una release de escritorio
  *   star init hooks                 instala commit-msg y pre-push en .githooks
@@ -46,7 +48,15 @@ import { hasOwnVersion } from "./manifests/types.ts";
 import { confirm, ask, interactive } from "./prompt.ts";
 import { checkReady } from "./readiness.ts";
 import { finishRelease, prepareRelease, type ReleaseDeps } from "./release.ts";
-import { bump, formatVersion, isLevel, LEVELS, type Level, parseVersion } from "./semver.ts";
+import {
+  bump,
+  formatVersion,
+  isLevel,
+  isPrerelease,
+  type Level,
+  LEVELS,
+  parseVersion,
+} from "./semver.ts";
 import {
   applyChanges,
   currentVersion,
@@ -66,6 +76,10 @@ Uso:
   star notes [versión]         las notas de esa versión en CHANGELOG.md
   star release [nivel]         prepara una versión desde develop: puerta, rama
                                release/<versión>, bump, commit, push y PR
+  star release <nivel> --beta  empieza una beta (0.6.0 → 0.7.0-beta.1). Sale como
+                               prerelease: la app instalada no la ve
+  star release beta            la beta siguiente (0.7.0-beta.1 → 0.7.0-beta.2).
+                               Para sacar la 0.7.0: star release minor
   star release finish [ver.]   cuando el CI pasa: squash con la versión como
                                asunto, actualiza develop y empuja el tag
   star release check <tag>     app de escritorio: latest.json tiene cada
@@ -291,14 +305,18 @@ async function release(
   arg: string | undefined,
   yes: boolean,
   platforms?: string,
+  beta = false,
 ) {
   if (sub === "finish") return finishRelease(releaseDeps(root, yes), arg);
   if (sub === "check") return releaseCheck(root, arg, platforms);
+  if (sub === "beta") return prepareRelease(releaseDeps(root, yes), "beta");
   if (sub !== undefined && !isLevel(sub)) {
-    throw new StarError(`"${sub}" no es un nivel ni "finish". Usa patch, minor, major o finish.`);
+    throw new StarError(
+      `"${sub}" no es un nivel. Usa patch, minor, major (con --beta para empezar una beta), beta, finish o check.`,
+    );
   }
   const level = sub ?? (await chooseLevel(currentVersion(inspect(root)), "star release"));
-  return prepareRelease(releaseDeps(root, yes), level);
+  return prepareRelease(releaseDeps(root, yes), level, beta);
 }
 
 async function initHooks(root: string, yes: boolean) {
@@ -440,7 +458,14 @@ function verify(root: string, tag: string | undefined, notesFile: string | undef
   if (notesFile) writeFileSync(notesFile, `${notes}\n`);
   // En GitHub Actions la versión sale como output del paso, para los jobs que
   // vienen después (el título de la release, el tag de una imagen).
-  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+  // `prerelease` le sirve a la app para decidir lo suyo (un ícono, un canal);
+  // los workflows de star lo deducen solos de la versión.
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      `version=${version}\nprerelease=${isPrerelease(version)}\n`,
+    );
+  }
   console.log(`\n✓ ${tag} se puede construir.`);
 }
 
@@ -455,7 +480,8 @@ function takeOption(args: string[], name: string): string | undefined {
 
 export async function main(argv: string[], root = process.cwd()): Promise<void> {
   const yes = argv.includes("--yes") || process.env.STAR_YES === "1";
-  const args = argv.filter((a) => a !== "--yes");
+  const beta = argv.includes("--beta");
+  const args = argv.filter((a) => a !== "--yes" && a !== "--beta");
   const into = takeOption(args, "--into");
   const notesFile = takeOption(args, "--notes-file");
   const platforms = takeOption(args, "--platforms");
@@ -492,7 +518,7 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
     case "notes":
       return notes(root, sub);
     case "release":
-      return release(root, sub, arg, yes, platforms);
+      return release(root, sub, arg, yes, platforms, beta);
     case "init":
       if (sub === "hooks") return initHooks(root, yes);
       if (sub === "changelog") return initChangelog(root);

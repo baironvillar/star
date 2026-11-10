@@ -215,6 +215,30 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
     expect(git(origin, "rev-list", "-n", "1", "v0.2.0")).toBe(git(origin, "rev-parse", "develop"));
   });
 
+  it("una beta copia las notas y las deja para la versión final", async () => {
+    const { work, origin } = repo();
+    await prepareRelease(
+      deps(work, () => null, []),
+      "minor",
+      true,
+    );
+    expect(git(work, "branch", "--show-current")).toBe("release/0.2.0-beta.1");
+    expect(git(work, "log", "-1", "--format=%s")).toBe("0.2.0-beta.1");
+    const changelog = readFileSync(join(work, "CHANGELOG.md"), "utf8");
+    expect(changelog).toContain(
+      "## [Sin publicar]\n\n- Algo nuevo.\n\n## [0.2.0-beta.1] - 2026-11-08\n\n- Algo nuevo.",
+    );
+
+    // Mergeada y etiquetada como cualquier versión.
+    git(work, "switch", "--quiet", "develop");
+    git(work, "merge", "--quiet", "--squash", "release/0.2.0-beta.1");
+    git(work, "commit", "--quiet", "-m", "0.2.0-beta.1");
+    git(work, "push", "--quiet", "origin", "develop");
+    git(work, "switch", "--quiet", "release/0.2.0-beta.1");
+    await finishRelease(deps(work, merged, []));
+    expect(git(origin, "tag", "--list")).toBe("v0.2.0-beta.1");
+  });
+
   it("no etiqueta un commit mergeado a mano con el número del PR en el asunto", async () => {
     const { work, origin } = repo();
     await prepareRelease(

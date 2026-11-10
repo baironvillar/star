@@ -16,7 +16,12 @@ siguen [SemVer](https://semver.org/lang/es/).
   `latest.json` tenga cada plataforma, que apunte a archivos de la release, que
   cada firma sea la de su `.sig` y que las notas sean las del CHANGELOG.
 - `verify.yml` acepta `runs-on` y `rust`, para la puerta de una app de
-  escritorio que corre `cargo test`.
+  escritorio que corre `cargo test`, y devuelve `prerelease`.
+- Betas: `star release minor --beta` saca la `0.7.0-beta.1`, `star release
+  beta` la siguiente, y `star release minor` la versión final. Una beta copia
+  las notas de `## [Sin publicar]` sin sacarlas de ahí, para que la versión
+  final salga con todas. `web-release.yml` y `tauri-release.yml` publican una
+  versión con sufijo como prerelease, que la app instalada no ve.
 
 ## [0.3.0] - 2026-11-09
 

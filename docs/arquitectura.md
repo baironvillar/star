@@ -66,6 +66,10 @@ vp run release minor     # desde develop
 vp run release finish    # cuando el CI del PR pasa
 ```
 
+Para una beta, `vp run release minor --beta` (`0.7.0-beta.1`) y después
+`vp run release beta` (`0.7.0-beta.2`). `vp run release minor` saca la `0.7.0`.
+Ver la decisión 16.
+
 **`star release <nivel>`**, desde `develop`:
 
 1. Chequea: estar en `develop` al día con `origin` y sin commits propios, sin
@@ -173,9 +177,9 @@ tag v* ──► verify.yml ──► web-release.yml    (app web: + jobs propio
      `latest.json`, apunta a un archivo de la release, su firma es la del `.sig`
      y las notas son las del CHANGELOG.
 
-  macOS se rechaza con un error que dice por qué. Lo propio de la app (canal,
-  variables de la build, `--config`) entra por `prerelease`, `build-env` y
-  `args`.
+  macOS se rechaza con un error que dice por qué. Una versión con sufijo
+  (`0.7.0-beta.1`) sale como prerelease (decisión 16). Lo propio de la app
+  (variables de la build, `--config`) entra por `build-env` y `args`.
 
 - **`web-release.yml`:** crea la release en borrador con las notas y los assets
   que la app subió como artefactos del workflow, y revisa que haya quedado en

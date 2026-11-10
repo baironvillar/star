@@ -66,3 +66,43 @@ export function bump(v: Version, level: Level): Version {
   if (pre) return { major: v.major, minor: v.minor, patch: v.patch };
   return { major: v.major, minor: v.minor, patch: v.patch + 1 };
 }
+
+/** Si la versión es una beta, una release candidate o cualquier prerelease. */
+export function isPrerelease(raw: string): boolean {
+  return parseVersion(raw, "la versión").prerelease !== undefined;
+}
+
+const sameBase = (a: Version, b: Version) =>
+  a.major === b.major && a.minor === b.minor && a.patch === b.patch;
+
+/**
+ * La versión que sigue, con betas.
+ *
+ * Una versión con sufijo sale como prerelease: GitHub no la devuelve en
+ * `releases/latest`, así que la app instalada no la ve, y quien la quiera
+ * probar la descarga a mano. Es la forma de tener un canal de prueba sin que
+ * dependa de en qué rama quedó el tag (star etiqueta en la base).
+ *
+ *   0.6.0          minor --beta  →  0.7.0-beta.1
+ *   0.7.0-beta.1   beta          →  0.7.0-beta.2
+ *   0.7.0-beta.2   minor         →  0.7.0
+ */
+export function nextVersion(current: Version, target: Level | "beta", beta = false): Version {
+  if (target === "beta") {
+    const n = /^beta\.(\d+)$/.exec(current.prerelease ?? "");
+    if (!n) {
+      throw new StarError(
+        `la ${formatVersion(current)} no es una beta. Para empezar una: \`star release minor --beta\` (o patch, o major).`,
+      );
+    }
+    return { ...current, prerelease: `beta.${Number(n[1]) + 1}` };
+  }
+  const base = bump(current, target);
+  if (!beta) return base;
+  if (current.prerelease !== undefined && sameBase(base, current)) {
+    throw new StarError(
+      `ya hay betas de la ${formatVersion(base)}. La siguiente es \`star release beta\`; para sacar la ${formatVersion(base)}, \`star release ${target}\`.`,
+    );
+  }
+  return { ...base, prerelease: "beta.1" };
+}

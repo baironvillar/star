@@ -39,10 +39,6 @@ on:
         description: Dónde se compila, separado por comas. windows, linux o las dos.
         type: string
         default: windows,linux
-      prerelease:
-        description: Marcar la release como prerelease. `releases/latest` no apunta a una, así que la app instalada no la ve.
-        type: boolean
-        default: false
       title:
         description: El título de la release. Vacío, la versión.
         type: string
@@ -126,7 +122,10 @@ jobs:
         id: release
         env:
           TITLE: ${{ inputs.title || inputs.version }}
-          PRERELEASE: ${{ inputs.prerelease }}
+          # Una versión con sufijo (0.7.0-beta.1) es una prerelease: GitHub no
+          # la devuelve en `releases/latest`, que es lo que lee el updater, así
+          # que la app instalada no la ve.
+          PRERELEASE: ${{ contains(inputs.version, '-') }}
         run: |
           if gh release view "$TAG" --json isDraft --jq .isDraft > draft.txt 2>/dev/null; then
             [ "$(cat draft.txt)" = "true" ] || {
@@ -207,7 +206,7 @@ jobs:
           releaseName: ${{ inputs.title || inputs.version }}
           releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
-          prerelease: ${{ inputs.prerelease }}
+          prerelease: ${{ contains(inputs.version, '-') }}
           # `releaseBody` se antepondría a lo que genera GitHub: las notas son
           # las del CHANGELOG y nada más.
           generateReleaseNotes: false

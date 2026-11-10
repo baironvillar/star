@@ -1,13 +1,13 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { changelogSection, promoteUnreleased, readChangelog } from "./changelog.ts";
+import { changelogSection, copyUnreleased, promoteUnreleased, readChangelog } from "./changelog.ts";
 import { readConfig } from "./config.ts";
 import { StarError } from "./errors.ts";
 import type { Gh } from "./gh.ts";
 import type { Git } from "./git.ts";
 import { hasOwnVersion } from "./manifests/types.ts";
 import type { Readiness } from "./readiness.ts";
-import { bump, formatVersion, type Level, parseVersion } from "./semver.ts";
+import { formatVersion, isPrerelease, type Level, nextVersion, parseVersion } from "./semver.ts";
 import {
   applyChanges,
   currentVersion,
@@ -77,7 +77,10 @@ function checkTag(git: Git, tag: string, problems: string[], warnings: string[])
 export type PrepareCheck = Readiness & {
   /** Las notas de la versión, si las hay. */
   notes: string | null;
-  /** El changelog con lo "sin publicar" promovido, si hace falta promoverlo. */
+  /**
+   * El changelog con lo "sin publicar" convertido en la sección de la versión
+   * (o copiado, en una beta), si hace falta.
+   */
   promoted: string | null;
 };
 
@@ -159,7 +162,9 @@ export function checkPrepare(input: {
   let notes = changelogSection(changelog, next);
   let promoted: string | null = null;
   if (!notes) {
-    promoted = promoteUnreleased(changelog, next, input.today);
+    promoted = isPrerelease(next)
+      ? copyUnreleased(changelog, next, input.today)
+      : promoteUnreleased(changelog, next, input.today);
     notes = promoted ? changelogSection(promoted, next) : null;
   }
   if (!notes) {
@@ -180,7 +185,11 @@ export function checkPrepare(input: {
 }
 
 /** Fase 1: deja la versión en un PR, lista para mergear. */
-export async function prepareRelease(deps: ReleaseDeps, level: Level): Promise<void> {
+export async function prepareRelease(
+  deps: ReleaseDeps,
+  level: Level | "beta",
+  beta = false,
+): Promise<void> {
   const { root, git, gh, io } = deps;
   const config = readConfig(root);
   if (!git.fetch())
@@ -190,7 +199,7 @@ export async function prepareRelease(deps: ReleaseDeps, level: Level): Promise<v
 
   const entries = inspect(root);
   const current = currentVersion(entries);
-  const next = formatVersion(bump(parseVersion(current, "la versión actual"), level));
+  const next = formatVersion(nextVersion(parseVersion(current, "la versión actual"), level, beta));
   const check = checkPrepare({
     entries,
     current,
@@ -222,7 +231,16 @@ export async function prepareRelease(deps: ReleaseDeps, level: Level): Promise<v
 
   io.log(`\n${current} → ${next}\n`);
   for (const change of changes) io.log(`  ${change.manifest.label}`);
-  if (check.promoted) io.log(`  CHANGELOG.md  ("Sin publicar" pasa a ser la ${next})`);
+  if (check.promoted) {
+    io.log(
+      isPrerelease(next)
+        ? `  CHANGELOG.md  (se copia "Sin publicar" a la ${next}, y se queda para la versión final)`
+        : `  CHANGELOG.md  ("Sin publicar" pasa a ser la ${next})`,
+    );
+  }
+  if (isPrerelease(next)) {
+    io.log(`\nLa ${next} sale como prerelease: la app instalada no la ve, se prueba a mano.`);
+  }
   io.log(`\n${check.notes}\n`);
   io.log(
     `Se crea ${branch}, se commitea "${next}" y se empuja${ghReady ? `, y se abre el PR a ${config.base}` : ""}.\n`,

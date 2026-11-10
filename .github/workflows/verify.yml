@@ -34,6 +34,9 @@ on:
       version:
         description: La versión del tag, sin la v (0.3.0).
         value: ${{ jobs.verify.outputs.version }}
+      prerelease:
+        description: '"true" si la versión tiene sufijo (0.7.0-beta.1) y sale como prerelease.'
+        value: ${{ jobs.verify.outputs.prerelease }}
 
 permissions:
   contents: read
@@ -49,6 +52,7 @@ jobs:
         shell: bash
     outputs:
       version: ${{ steps.verify.outputs.version }}
+      prerelease: ${{ steps.verify.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
