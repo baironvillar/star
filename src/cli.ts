@@ -501,14 +501,16 @@ async function hook(root: string, name: string | undefined, arg: string | undefi
 function lint(root: string, what: string | undefined, arg: string | undefined, into?: string) {
   switch (what) {
     case "commits": {
-      const { onlyTip, results } = lintCommits(gitIn(root), arg ?? "HEAD");
+      const { onlyTip, results } = lintCommits(gitIn(root), arg ?? "HEAD", readConfig(root).lint);
       if (onlyTip) {
         // Es lo normal en el primer push de una rama o después de un force-push,
         // pero se dice: un rango mal escrito no puede pasar por uno revisado.
         console.warn("! La base del rango no está en este clon: se revisa sólo la punta.");
       }
       for (const r of results) {
-        console.log(`  ${r.verdict.ok ? "✓" : "✗"} ${r.sha.slice(0, 12)}  ${r.subject}`);
+        const mark = r.skipped ? "-" : r.verdict.ok ? "✓" : "✗";
+        const note = r.skipped ? "  (en star.lint.skip)" : "";
+        console.log(`  ${mark} ${r.sha.slice(0, 12)}  ${r.subject}${note}`);
       }
       const failed = results.filter((r) => !r.verdict.ok);
       if (failed.length === 0) return;
@@ -553,7 +555,7 @@ function doctor(root: string) {
 
 function verify(root: string, tag: string | undefined, notesFile: string | undefined) {
   if (!tag) throw new StarError("falta el tag: `star verify v0.2.0`.");
-  const { version, notes } = verifyTag(
+  const { version, notes, commit } = verifyTag(
     {
       root,
       git: gitIn(root),
@@ -570,7 +572,7 @@ function verify(root: string, tag: string | undefined, notesFile: string | undef
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(
       process.env.GITHUB_OUTPUT,
-      `version=${version}\nprerelease=${isPrerelease(version)}\n`,
+      `version=${version}\nprerelease=${isPrerelease(version)}\ncommit=${commit}\n`,
     );
   }
   console.log(`\n✓ ${tag} se puede construir.`);

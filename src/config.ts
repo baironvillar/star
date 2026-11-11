@@ -7,10 +7,12 @@ export type Config = {
   base: string;
   /** Los comandos que tienen que pasar antes de publicar, o `null` si no hay forma de saberlos. */
   gate: string[] | null;
+  /** La historia que `star lint commits` no revisa. */
+  lint: { since?: string; skip: string[] };
 };
 
 type PackageJson = {
-  star?: { base?: unknown; gate?: unknown };
+  star?: { base?: unknown; gate?: unknown; lint?: { since?: unknown; skip?: unknown } };
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
@@ -51,5 +53,20 @@ export function readConfig(root: string): Config {
     );
   }
 
-  return { base: star.base ?? "develop", gate };
+  const lint = star.lint ?? {};
+  if (lint.since !== undefined && typeof lint.since !== "string") {
+    throw new StarError('"star.lint.since" en package.json tiene que ser un commit.');
+  }
+  if (
+    lint.skip !== undefined &&
+    !(Array.isArray(lint.skip) && lint.skip.every((s) => typeof s === "string"))
+  ) {
+    throw new StarError('"star.lint.skip" en package.json tiene que ser una lista de commits.');
+  }
+
+  return {
+    base: star.base ?? "develop",
+    gate,
+    lint: { since: lint.since, skip: (lint.skip as string[] | undefined) ?? [] },
+  };
 }

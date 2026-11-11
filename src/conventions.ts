@@ -103,6 +103,11 @@ export function checkPullRequest(head: string, into: string, base: string): Verd
   if (into === "main") {
     return head === base ? ok : fail(`main sólo recibe pull requests desde ${base}`);
   }
+  // Un PR encima de otro PR se mergea en la rama del otro, y si el de abajo
+  // ya entró, el cambio no llega nunca a la base. Le pasó a flotas#2.
+  if (into !== base) {
+    return fail(`un pull request va a ${base} (o de ${base} a main), no a ${into}`);
+  }
   return checkBranch(head);
 }
 

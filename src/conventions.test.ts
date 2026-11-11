@@ -87,6 +87,8 @@ describe("checkPullRequest", () => {
     expect(checkPullRequest("feat/x", "main", "develop").ok).toBe(false);
     expect(checkPullRequest("feat/x", "develop", "develop").ok).toBe(true);
     expect(checkPullRequest("wip", "develop", "develop").ok).toBe(false);
+    // Un PR encima de otro PR: si el de abajo entra primero, éste no llega nunca.
+    expect(checkPullRequest("feat/b", "feat/a", "develop").ok).toBe(false);
   });
 });
 

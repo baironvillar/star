@@ -143,6 +143,35 @@ describe("hooks con git de verdad", { timeout: 60_000 }, () => {
     expect(inspectHooks(dir)[0]?.state).toBe("same");
   });
 
+  it("con since y skip no revisa la historia de antes de la regla", () => {
+    const dir = repo();
+    const commit = (subject: string) => {
+      writeFileSync(join(dir, "a"), subject);
+      git(dir, "add", ".");
+      git(dir, "commit", "--quiet", "-m", subject);
+      return git(dir, "rev-parse", "HEAD");
+    };
+    commit("Old style commit.");
+    const rule = commit("chore(hooks): adopt the convention");
+    const legacy = commit("0.6.0 #48");
+    commit("feat(x): add y");
+
+    // Sin base conocida (primer push): desde la regla, salteando el anotado.
+    const { onlyTip, results } = lintCommits(gitIn(dir), `${"0".repeat(40)}..HEAD`, {
+      since: rule,
+      skip: [legacy.slice(0, 12)],
+    });
+    expect(onlyTip).toBe(false);
+    expect(results.map((r) => [r.subject, r.verdict.ok, r.skipped ?? false])).toEqual([
+      ["feat(x): add y", true, false],
+      ["0.6.0 #48", true, true],
+    ]);
+    // Con un rango que arranca antes de la regla, lo viejo tampoco entra.
+    const first = git(dir, "rev-list", "--max-parents=0", "HEAD");
+    const ranged = lintCommits(gitIn(dir), `${first}..HEAD`, { since: rule }).results;
+    expect(ranged.map((r) => r.subject)).toEqual(["feat(x): add y", "0.6.0 #48"]);
+  });
+
   it("lintCommits lee los mensajes de git", () => {
     const dir = repo();
     writeFileSync(join(dir, "a"), "1");

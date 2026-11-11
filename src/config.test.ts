@@ -21,6 +21,7 @@ describe("readConfig", () => {
     expect(readConfig(withPackage({ devDependencies: { "vite-plus": "1.5.0" } }))).toEqual({
       base: "develop",
       gate: ["vp check", "vp test run"],
+      lint: { skip: [] },
     });
   });
 
@@ -32,11 +33,19 @@ describe("readConfig", () => {
     expect(readConfig(withPackage({ star: { base: "main", gate: "vp run verify" } }))).toEqual({
       base: "main",
       gate: ["vp run verify"],
+      lint: { skip: [] },
     });
     expect(readConfig(withPackage({ star: { gate: ["biome check", "bun test"] } })).gate).toEqual([
       "biome check",
       "bun test",
     ]);
+  });
+
+  it("lee la historia que el lint no revisa", () => {
+    expect(
+      readConfig(withPackage({ star: { lint: { since: "abc1234", skip: ["def5678"] } } })).lint,
+    ).toEqual({ since: "abc1234", skip: ["def5678"] });
+    expect(() => readConfig(withPackage({ star: { lint: { skip: "x" } } }))).toThrow(StarError);
   });
 
   it("rechaza una configuración con otra forma", () => {

@@ -19,9 +19,14 @@ export type VerifyDeps = {
  * la regla está en un solo lugar. Los chequeos baratos van primero; la puerta,
  * al final.
  *
- * Devuelve la versión y sus notas.
+ * Devuelve la versión, sus notas y el commit del tag (sin pelar, el sha de un
+ * tag anotado es el del tag, no el del commit: la app que compila su commit
+ * adentro necesita el segundo).
  */
-export function verifyTag(deps: VerifyDeps, tag: string): { version: string; notes: string } {
+export function verifyTag(
+  deps: VerifyDeps,
+  tag: string,
+): { version: string; notes: string; commit: string } {
   const { root, git, log } = deps;
   const entries = inspect(root);
   const version = currentVersion(entries);
@@ -41,8 +46,11 @@ export function verifyTag(deps: VerifyDeps, tag: string): { version: string; not
 
   // GitHub titula la corrida de un tag con el asunto del commit etiquetado, y
   // `release finish` lo deja así. Un merge hecho a mano trae el número del PR.
-  const message = git.commitMessage(tag);
-  if (message === null) throw new StarError(`el tag ${tag} no está en este clon.`);
+  const commit = git.commitOf(tag);
+  const message = commit === null ? null : git.commitMessage(commit);
+  if (commit === null || message === null) {
+    throw new StarError(`el tag ${tag} no está en este clon.`);
+  }
   const subject = subjectOf(message);
   if (subject !== version) {
     throw new StarError(
@@ -64,5 +72,5 @@ export function verifyTag(deps: VerifyDeps, tag: string): { version: string; not
   if (!deps.runGate(gate)) throw new StarError("la puerta falló: esta versión no sale.");
   log(`✓ pasó la puerta`);
 
-  return { version, notes };
+  return { version, notes, commit };
 }

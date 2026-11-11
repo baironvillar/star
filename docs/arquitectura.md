@@ -137,6 +137,9 @@ exec bunx star hook commit-msg "$@"
   de Linux o macOS git los ignora con un aviso. En Windows, además, se apaga
   `core.filemode` si está prendido: con el disco sin el bit, git vería los
   hooks cambiados a 644 y un `git add -A` desharía el `--chmod`.
+- **Una app con historia** le dice a `star lint commits` desde dónde rige la
+  regla (`"star": { "lint": { "since", "skip" } }`), y lo de antes no se revisa
+  (decisión 14).
 - **La regla no es configurable todavía.** Los tipos, el largo y las ramas
   protegidas son los de flotas y Starless. La base protegida sale de
   `"star": { "base" }`. Ver la pregunta abierta en [`alcance.md`](alcance.md).

@@ -23,6 +23,7 @@ export function fakeGit(overrides: Partial<Git> = {}): Git & { calls: string[] }
     ahead: () => 0,
     fetch: () => true,
     headSubject: () => "",
+    commitOf: () => null,
     commitMessage: () => null,
     commitsBetween: () => [],
     getConfig: () => null,

@@ -77,7 +77,11 @@ describe("verifyTag con git de verdad", { timeout: 60_000 }, () => {
 
   it("un tag hecho por release finish pasa, y devuelve versión y notas", () => {
     const { deps: d, ran } = deps(tagged());
-    expect(verifyTag(d, "v0.2.0")).toEqual({ version: "0.2.0", notes: "- Algo." });
+    const result = verifyTag(d, "v0.2.0");
+    expect(result).toMatchObject({ version: "0.2.0", notes: "- Algo." });
+    // El commit, no el objeto del tag anotado.
+    expect(result.commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(result.commit).toBe(gitIn(d.root).commitOf("HEAD"));
     expect(ran).toEqual([["vp check"]]);
   });
 
