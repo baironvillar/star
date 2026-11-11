@@ -6,6 +6,8 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.6.0] - 2026-11-11
+
 ### Agregado
 
 - `star init github`: ajusta el repo en GitHub para que el squash de un PR salga
