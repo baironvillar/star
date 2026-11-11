@@ -164,6 +164,8 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
       downloadAsset: () => null,
       secretNames: () => [],
       setSecret: () => {},
+      mergeSettings: () => null,
+      updateMergeSettings: () => {},
     };
     return {
       root: work,

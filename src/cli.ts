@@ -16,9 +16,11 @@
  *   star init changelog             crea un CHANGELOG.md vacío, si no hay uno
  *   star init updater               llave del updater de Tauri: respaldo, secreto y pública
  *   star init relay                 copia el relay de reportes (un Worker) a relay/
+ *   star init github                el squash de un PR sale de su título y descripción
  *   star hook <nombre> [args]       lo que corre un hook de git (no se llama a mano)
  *   star lint commits [rango]       revisa los mensajes de commit (CI)
  *   star lint branch <rama>         revisa el nombre de una rama (CI)
+ *   star lint title <título>        revisa el título de un PR, el asunto del squash (CI)
  *   star doctor                     qué falta o está mal en la app
  *   star verify <tag>               todo lo que se revisa antes de construir un tag (CI)
  *
@@ -36,9 +38,11 @@ import {
   checkMessage,
   checkPullRequest,
   checkPush,
+  checkTitle,
   SUBJECT_HELP,
   subjectOf,
 } from "./conventions.ts";
+import { configureMerge } from "./merge-settings.ts";
 import { StarError } from "./errors.ts";
 import { ghIn } from "./gh.ts";
 import { diagnose } from "./doctor.ts";
@@ -106,9 +110,13 @@ Uso:
                                --import <ruta> trae una llave que ya existía
   star init relay              copia a relay/ el Worker que convierte reportes
                                en issues. Con --name <nombre> para el nombre
+  star init github             ajusta el repo en GitHub para que el squash de un
+                               PR salga de su título y su descripción, tenga
+                               uno o varios commits. Pregunta antes
   star lint commits [rango]    revisa los mensajes de base..head, o de un commit
   star lint branch <rama>      revisa el nombre de una rama; con --into <base>,
                                también hacia dónde va el pull request
+  star lint title <título>     revisa el título de un PR: es el asunto del squash
   star doctor                  qué falta o está mal en la app, y cómo arreglarlo
   star verify <tag>            antes de construir un tag: el commit se llama
                                como la versión, el tag coincide, hay notas y
@@ -453,6 +461,44 @@ function initRelay(root: string, nameArg: string | undefined) {
   );
 }
 
+/**
+ * Los ajustes de merge del repo en GitHub. Es un cambio fuera de la app, en un
+ * repo que puede ser de más gente: siempre se muestra y se pregunta.
+ */
+async function initGithub(root: string, yes: boolean) {
+  const gh = ghIn(root);
+  if (!gh.available())
+    throw new StarError("gh no está instalado o no tiene sesión: gh auth login.");
+  const result = await configureMerge(gh, async (changes) => {
+    console.log("GitHub arma hoy el squash de un PR así, y star lo cambia:\n");
+    for (const change of changes) console.log(`  ${change.description}`);
+    console.log(
+      [
+        "",
+        "Con lo de GitHub por defecto, el mensaje sale del commit sólo si el PR tiene",
+        "uno. Con más, el asunto es el título del PR y el cuerpo la lista de commits,",
+        "y hay que escribirlo a mano al mergear. Así sale siempre del título y la",
+        "descripción del PR, que la CI revisa con `star lint title`.",
+        "",
+      ].join("\n"),
+    );
+    return goAhead("¿Cambiar los ajustes del repo en GitHub?", yes);
+  });
+  switch (result.action) {
+    case "unreadable":
+      throw new StarError(
+        "no se pudieron leer los ajustes del repo. Hace falta un origin en GitHub y permiso de admin.",
+      );
+    case "ready":
+      console.log("✓ El squash ya sale del título y la descripción del PR.");
+      return;
+    case "declined":
+      return;
+    case "applied":
+      console.log("\n✓ El squash de cada PR sale ahora de su título y su descripción.");
+  }
+}
+
 function initChangelog(root: string) {
   const path = join(root, "CHANGELOG.md");
   // Un changelog que ya existe tiene la historia de la app: nunca se pisa.
@@ -532,8 +578,22 @@ function lint(root: string, what: string | undefined, arg: string | undefined, i
       console.log(`✓ ${arg}${into ? ` → ${into}` : ""}`);
       return;
     }
+    case "title": {
+      // El título llega por argumento (de `github.event.pull_request.title` en
+      // la CI), no se le pregunta a GitHub: así se prueba sin red.
+      if (arg === undefined)
+        throw new StarError('falta el título: `star lint title "feat: algo"`.');
+      const verdict = checkTitle(arg);
+      if (!verdict.ok) {
+        throw new StarError(
+          `El título del PR no cumple la convención: ${verdict.reason}.\n\n  título: "${arg.trim()}"\n\nAl mergear con squash, el título es el asunto del commit que llega a la base.\nCámbialo en GitHub; la CI vuelve a correr sola.\n\n${SUBJECT_HELP}`,
+        );
+      }
+      console.log(`✓ ${arg.trim()}`);
+      return;
+    }
     default:
-      throw new StarError(`"lint ${what ?? ""}" no existe. Usa commits o branch.`);
+      throw new StarError(`"lint ${what ?? ""}" no existe. Usa commits, branch o title.`);
   }
 }
 
@@ -635,8 +695,9 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
       if (sub === "changelog") return initChangelog(root);
       if (sub === "updater") return initUpdater(root, yes, importFrom);
       if (sub === "relay") return initRelay(root, name);
+      if (sub === "github") return initGithub(root, yes);
       throw new StarError(
-        `"init ${sub ?? ""}" no existe. Usa init hooks, init changelog, init updater o init relay.`,
+        `"init ${sub ?? ""}" no existe. Usa init hooks, init changelog, init updater, init relay o init github.`,
       );
     case "hook":
       return hook(root, sub, arg);

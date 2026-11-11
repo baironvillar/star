@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { StarError } from "./errors.ts";
+import type { MergeSettings } from "./merge-settings.ts";
 
 export type PullRequest = {
   number: number;
@@ -29,7 +30,38 @@ export type Gh = {
   secretNames(): string[] | null;
   /** Guarda un secreto del repo. El valor va por stdin: nunca en argv ni en pantalla. */
   setSecret(name: string, value: string): void;
+  /** Cómo arma GitHub el squash en este repo, o `null` si no se pudo preguntar. */
+  mergeSettings(): MergeSettings | null;
+  /** Cambia ajustes del repo (`gh api -X PATCH`). Hace falta ser admin. */
+  updateMergeSettings(fields: Record<string, string | boolean>): void;
 };
+
+type RepoJson = {
+  allow_squash_merge?: boolean;
+  squash_merge_commit_title?: string;
+  squash_merge_commit_message?: string;
+};
+
+/**
+ * Los ajustes de merge que vienen en `GET /repos/{owner}/{repo}`. Sin permiso
+ * de escritura GitHub omite los campos del squash: eso es "no se sabe", no un
+ * valor.
+ */
+export function parseMergeSettings(json: string): MergeSettings | null {
+  const repo = JSON.parse(json || "{}") as RepoJson;
+  if (
+    typeof repo.allow_squash_merge !== "boolean" ||
+    typeof repo.squash_merge_commit_title !== "string" ||
+    typeof repo.squash_merge_commit_message !== "string"
+  ) {
+    return null;
+  }
+  return {
+    allowSquash: repo.allow_squash_merge,
+    squashTitle: repo.squash_merge_commit_title,
+    squashMessage: repo.squash_merge_commit_message,
+  };
+}
 
 type Rollup = { status?: string; conclusion?: string; state?: string };
 
@@ -147,6 +179,24 @@ export function ghIn(cwd: string): Gh {
       const r = run(["secret", "set", name], value);
       // El error de gh no trae el valor; igual no se muestra stdout.
       if (r.status !== 0) throw new StarError(`gh no pudo guardar el secreto ${name}:\n${r.err}`);
+    },
+    mergeSettings() {
+      // `{owner}/{repo}` lo resuelve gh con el remoto del clon.
+      const r = run(["api", "repos/{owner}/{repo}"]);
+      if (r.status !== 0) return null;
+      return parseMergeSettings(r.out);
+    },
+    updateMergeSettings(fields) {
+      // `-F` convierte true/false en booleanos; `-f` deja el texto tal cual.
+      const args = Object.entries(fields).flatMap(([key, value]) =>
+        typeof value === "boolean" ? ["-F", `${key}=${value}`] : ["-f", `${key}=${value}`],
+      );
+      const r = run(["api", "-X", "PATCH", "repos/{owner}/{repo}", ...args]);
+      if (r.status !== 0) {
+        throw new StarError(
+          `gh no pudo cambiar los ajustes del repo (hace falta ser admin):\n${r.err}`,
+        );
+      }
     },
     downloadAsset(tag, name) {
       // `-p` es un glob: los corchetes de un nombre se escapan para que calce

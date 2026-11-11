@@ -80,6 +80,15 @@ export function checkMessage(message: string): Verdict {
 }
 
 /**
+ * El título de un pull request. Con los ajustes de merge que pide star
+ * (`star init github`), GitHub lo usa como asunto del squash, así que sigue la
+ * misma regla que un commit: es el asunto del commit que llega a la base.
+ */
+export function checkTitle(title: string): Verdict {
+  return checkSubject(title.trim());
+}
+
+/**
  * El nombre de una rama: `tipo/descripcion-corta` o `release/<versión>`.
  *
  * `hotfix` vale como tipo de rama aunque no de commit: es la rama que sale de
