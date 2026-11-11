@@ -219,9 +219,22 @@ publicado, y una llave nueva los deja sin actualizaciones.
 
 ### Relay (escritorio)
 
-El Worker de Starless, parametrizado: repo, etiquetas, marcador del issue y
-límite por IP. Cada app lo despliega en su propia cuenta de Cloudflare, y el
-token de GitHub vive como secreto del Worker, nunca en la app.
+El Worker de Starless, en `templates/relay/`. `star init relay` lo copia a
+`relay/` en la app con el nombre (`APP`) y el repo (`REPO`) en
+`wrangler.toml`. Cada app lo despliega en su propia cuenta de Cloudflare, y el
+token de GitHub vive como secreto del Worker, nunca en la app ni en un archivo.
+
+- **El código es el mismo de Starless.** Lo único propio era el nombre en el
+  User-Agent y en las marcas de cada issue (`<!-- starless-relay -->`). Ahora
+  sale de `APP`, y con `APP = "starless"` las marcas de los issues existentes
+  siguen siendo las mismas.
+- **No pisa un `relay/` que ya existe** (decisión 14). Starless tiene el suyo,
+  con el id de su almacenamiento ya commiteado.
+- **star no crea la cuenta de Cloudflare ni el token.** Los pasos están en el
+  README que se copia, y el token va directo a Cloudflare con
+  `wrangler secret put`.
+- Los tests de la plantilla son de `bun test`, como los va a correr la app, y
+  el CI de star los corre (`bun test templates`).
 
 ## Instalación en una app
 

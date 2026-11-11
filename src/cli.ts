@@ -15,6 +15,7 @@
  *   star init hooks                 instala commit-msg y pre-push en .githooks
  *   star init changelog             crea un CHANGELOG.md vacío, si no hay uno
  *   star init updater               llave del updater de Tauri: respaldo, secreto y pública
+ *   star init relay                 copia el relay de reportes (un Worker) a relay/
  *   star hook <nombre> [args]       lo que corre un hook de git (no se llama a mano)
  *   star lint commits [rango]       revisa los mensajes de commit (CI)
  *   star lint branch <rama>         revisa el nombre de una rama (CI)
@@ -51,6 +52,7 @@ import {
   uploadKey,
   writePubkey,
 } from "./updater-init.ts";
+import { appName, githubRepo, installRelay } from "./relay-init.ts";
 import { verifyTag } from "./verify.ts";
 import { gitIn } from "./git.ts";
 import { HOOKS_DIR, inspectHooks, installHooks, lintCommits } from "./hooks.ts";
@@ -102,6 +104,8 @@ Uso:
                                revisa la que hay), la respalda en ~/.star/keys,
                                la sube como secreto y escribe la pública. Con
                                --import <ruta> trae una llave que ya existía
+  star init relay              copia a relay/ el Worker que convierte reportes
+                               en issues. Con --name <nombre> para el nombre
   star lint commits [rango]    revisa los mensajes de base..head, o de un commit
   star lint branch <rama>      revisa el nombre de una rama; con --into <base>,
                                también hacia dónde va el pull request
@@ -428,6 +432,27 @@ async function initUpdater(root: string, yes: boolean, importFrom: string | unde
   }
 }
 
+function initRelay(root: string, nameArg: string | undefined) {
+  const app = nameArg ?? appName(root);
+  const repo = githubRepo(gitIn(root).getConfig("remote.origin.url"));
+  if (!repo)
+    console.warn("! origin no es un repo de GitHub: completa REPO en relay/wrangler.toml.");
+  const written = installRelay(root, { app, repo: repo ?? "dueño/repo" });
+  for (const file of written) console.log(`  ${file}`);
+  console.log(
+    [
+      "",
+      `✓ El relay de ${app} quedó en relay/. Agrega a package.json:`,
+      "",
+      '  "relay:test": "bun test relay",',
+      '  "relay:deploy": "bunx wrangler deploy --config relay/wrangler.toml"',
+      "",
+      "y sigue relay/README.md para ponerlo en marcha: la cuenta de Cloudflare y",
+      "el token de GitHub los creas tú, y el token va directo a Cloudflare.",
+    ].join("\n"),
+  );
+}
+
 function initChangelog(root: string) {
   const path = join(root, "CHANGELOG.md");
   // Un changelog que ya existe tiene la historia de la app: nunca se pisa.
@@ -568,6 +593,7 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
   const notesFile = takeOption(args, "--notes-file");
   const platforms = takeOption(args, "--platforms");
   const importFrom = takeOption(args, "--import");
+  const name = takeOption(args, "--name");
   const [command, sub, arg] = args;
 
   switch (command) {
@@ -606,8 +632,9 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
       if (sub === "hooks") return initHooks(root, yes);
       if (sub === "changelog") return initChangelog(root);
       if (sub === "updater") return initUpdater(root, yes, importFrom);
+      if (sub === "relay") return initRelay(root, name);
       throw new StarError(
-        `"init ${sub ?? ""}" no existe. Usa init hooks, init changelog o init updater.`,
+        `"init ${sub ?? ""}" no existe. Usa init hooks, init changelog, init updater o init relay.`,
       );
     case "hook":
       return hook(root, sub, arg);

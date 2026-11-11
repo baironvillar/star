@@ -8,6 +8,7 @@
   },
   "files": [
     "src",
+    "templates",
     "!src/**/*.test.ts"
   ],
   "type": "module",
