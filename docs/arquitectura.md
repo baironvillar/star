@@ -197,11 +197,25 @@ así que cada versión del kit los prueba en GitHub.
 
 ### Updater (escritorio)
 
-`star init` genera las llaves con `tauri signer generate`, con una
-contraseña aleatoria creada dentro del proceso, y las pasa por stdin a
-`gh secret set`. Ni la llave ni la contraseña aparecen en argv, en pantalla ni
-en un log. La llave pública se escribe en `tauri.conf.json` como texto. Ver la
-pregunta abierta sobre el respaldo en [`alcance.md`](alcance.md).
+`star init updater` decide qué hacer según lo que ya hay, y nunca genera una
+llave para una app que ya tiene una: la pública va adentro de cada instalador
+publicado, y una llave nueva los deja sin actualizaciones.
+
+| La app tiene                             | Qué hace                                                                                                       |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `"pubkey": ""` y nada en el respaldo     | genera la llave en `~/.star/keys/<identifier>/`, la sube como `TAURI_SIGNING_PRIVATE_KEY` y escribe la pública |
+| la pública y el respaldo, sin el secreto | sube el respaldo como secreto                                                                                  |
+| la pública y el secreto, sin respaldo    | avisa; `--import <ruta>` copia una llave existente si su `.pub` es la de la app                                |
+| un respaldo que no es de esta pública    | no toca nada                                                                                                   |
+
+- **Sin contraseña** (decisión 17): `tauri signer generate` sólo la acepta por
+  `-p`, en argv. La llave se protege por dónde vive.
+- La llave va a `gh secret set` **por stdin**. No aparece en argv, en pantalla
+  ni en un log; la salida de `tauri signer` se captura.
+- La pública se escribe en `plugins.updater.pubkey` como texto
+  (`findStringAt`), sin reformatear `tauri.conf.json`.
+- `doctor` revisa lo mismo, más `bundle.createUpdaterArtifacts`. De los
+  secretos lee sólo los nombres.
 
 ### Relay (escritorio)
 

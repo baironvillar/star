@@ -143,3 +143,17 @@ rama quedó el tag, y se lee en el número.
   publicar hasta la versión final, que sale con todas sus notas.
 - `verify.yml` devuelve `prerelease` para lo que la app decida por su cuenta
   (Starless: el ícono de desarrollo y el canal que muestra en Ajustes).
+
+## 17. La llave del updater: respaldo fuera del repo y sin contraseña
+
+GitHub no deja leer un secreto después de guardarlo. Si la llave del updater
+sólo viviera ahí y se perdiera, ninguna app instalada se podría volver a
+actualizar. `star init updater` deja un respaldo en
+`~/.star/keys/<identifier>/`, fuera del repo, para que no haya forma de
+commitearlo por error, y dice que se pase a un gestor de contraseñas.
+
+La llave se genera **sin contraseña**. `tauri signer generate` sólo la acepta
+por `-p`, y en argv la vería cualquier proceso del usuario. Una contraseña
+también habría que respaldarla, y guardarla al lado de la llave no protege
+nada. La llave se protege por dónde vive: los secretos de GitHub y el
+respaldo.

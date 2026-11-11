@@ -99,3 +99,65 @@ function readString(text: string, start: number): { value: string; next: number 
   }
   throw new StarError("hay un string sin cerrar en el JSON.");
 }
+
+/**
+ * El valor string que está en una ruta de claves (`["plugins", "updater",
+ * "pubkey"]`), con su posición. Igual que {@link findTopLevelString}, para
+ * cambiar sólo esos caracteres sin reformatear el archivo.
+ *
+ * Devuelve `null` si la ruta no existe o el valor no es un string.
+ */
+export function findStringAt(text: string, path: readonly string[]): StringSpan | null {
+  let found: StringSpan | null = null;
+
+  // `rest` es lo que falta de la ruta si este valor está en ella, o `null`.
+  function value(i: number, rest: readonly string[] | null): number {
+    i = skipSpace(text, i);
+    const ch = text[i];
+    if (ch === '"') return readString(text, i).next;
+    if (ch === "{") {
+      i = skipSpace(text, i + 1);
+      if (text[i] === "}") return i + 1;
+      for (;;) {
+        if (text[i] !== '"') throw new StarError(`JSON inválido cerca de la posición ${i}.`);
+        const key = readString(text, i);
+        i = skipSpace(text, key.next);
+        if (text[i] !== ":") throw new StarError(`JSON inválido cerca de la posición ${i}.`);
+        const onPath = rest !== null && rest[0] === key.value;
+        const start = skipSpace(text, i + 1);
+        if (onPath && rest.length === 1) {
+          if (text[start] === '"') {
+            const str = readString(text, start);
+            found = { start: start + 1, end: str.next - 1, value: str.value };
+          }
+        }
+        i = skipSpace(text, value(start, onPath && rest.length > 1 ? rest.slice(1) : null));
+        if (text[i] === ",") {
+          i = skipSpace(text, i + 1);
+          continue;
+        }
+        if (text[i] === "}") return i + 1;
+        throw new StarError(`JSON inválido cerca de la posición ${i}.`);
+      }
+    }
+    if (ch === "[") {
+      i = skipSpace(text, i + 1);
+      if (text[i] === "]") return i + 1;
+      for (;;) {
+        i = skipSpace(text, value(i, null));
+        if (text[i] === ",") {
+          i++;
+          continue;
+        }
+        if (text[i] === "]") return i + 1;
+        throw new StarError(`JSON inválido cerca de la posición ${i}.`);
+      }
+    }
+    // Número, true, false o null: hasta el siguiente separador.
+    while (i < text.length && !/[\s,}\]]/.test(text[i] ?? "")) i++;
+    return i;
+  }
+
+  value(text.charCodeAt(0) === 0xfeff ? 1 : 0, path);
+  return found;
+}

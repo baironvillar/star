@@ -17,6 +17,8 @@ const gh = (available = true): Gh => ({
   mergeSquash: () => {},
   releaseAssets: () => [],
   downloadAsset: () => null,
+  secretNames: () => [],
+  setSecret: () => {},
 });
 
 /** Una app en orden: la que deja star después de adoptarlo entero. */

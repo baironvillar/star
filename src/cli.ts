@@ -14,6 +14,7 @@
  *   star release check <tag>        revisa latest.json y las firmas de una release de escritorio
  *   star init hooks                 instala commit-msg y pre-push en .githooks
  *   star init changelog             crea un CHANGELOG.md vacío, si no hay uno
+ *   star init updater               llave del updater de Tauri: respaldo, secreto y pública
  *   star hook <nombre> [args]       lo que corre un hook de git (no se llama a mano)
  *   star lint commits [rango]       revisa los mensajes de commit (CI)
  *   star lint branch <rama>         revisa el nombre de una rama (CI)
@@ -41,6 +42,15 @@ import { StarError } from "./errors.ts";
 import { ghIn } from "./gh.ts";
 import { diagnose } from "./doctor.ts";
 import { checkPublishedFiles, parsePlatforms } from "./updater.ts";
+import {
+  generateKeyWithTauri,
+  importKey,
+  inspectUpdater,
+  planUpdater,
+  PRIVATE_SECRET,
+  uploadKey,
+  writePubkey,
+} from "./updater-init.ts";
 import { verifyTag } from "./verify.ts";
 import { gitIn } from "./git.ts";
 import { HOOKS_DIR, inspectHooks, installHooks, lintCommits } from "./hooks.ts";
@@ -88,6 +98,10 @@ Uso:
   star init hooks              instala commit-msg y pre-push en .githooks y
                                apunta git ahí (core.hooksPath)
   star init changelog          crea un CHANGELOG.md con "## [Sin publicar]"
+  star init updater            app de escritorio: genera la llave del updater (o
+                               revisa la que hay), la respalda en ~/.star/keys,
+                               la sube como secreto y escribe la pública. Con
+                               --import <ruta> trae una llave que ya existía
   star lint commits [rango]    revisa los mensajes de base..head, o de un commit
   star lint branch <rama>      revisa el nombre de una rama; con --into <base>,
                                también hacia dónde va el pull request
@@ -346,6 +360,74 @@ async function initHooks(root: string, yes: boolean) {
   console.log("  Los hooks quedaron en el stage, como ejecutables: si cambiaron, commitéalos.");
 }
 
+async function initUpdater(root: string, yes: boolean, importFrom: string | undefined) {
+  const gh = ghIn(root);
+  let state = inspectUpdater(root, gh);
+  if (!state) throw new StarError("no hay src-tauri/tauri.conf.json: esta no es una app de Tauri.");
+
+  if (importFrom) {
+    importKey(state, importFrom);
+    console.log(`✓ Llave importada a ${state.backup.dir}.`);
+    state = inspectUpdater(root, gh) ?? state;
+  }
+
+  if (!state.createsArtifacts) {
+    console.warn(
+      '! "bundle.createUpdaterArtifacts" no es true en tauri.conf.json: sin eso no hay .sig ni latest.json.',
+    );
+  }
+
+  const plan = planUpdater(state);
+  switch (plan.action) {
+    case "blocked":
+      throw new StarError(plan.reason);
+    case "ready":
+      for (const warning of plan.warnings) console.warn(`! ${warning}`);
+      console.log(
+        `✓ El updater tiene llave: la pública en tauri.conf.json, ${PRIVATE_SECRET} en GitHub${state.backup.hasKey ? ` y el respaldo en ${state.backup.dir}` : ""}.`,
+      );
+      return;
+    case "upload":
+      if (!(await goAhead(`¿Subir la llave de ${state.backup.dir} como ${PRIVATE_SECRET}?`, yes))) {
+        return;
+      }
+      uploadKey(state, gh);
+      console.log(`✓ ${PRIVATE_SECRET} guardado en GitHub.`);
+      return;
+    case "generate": {
+      console.log(
+        [
+          `Se genera la llave del updater de ${state.identifier}:`,
+          "",
+          `  respaldo   ${state.backup.dir}  (fuera del repo)`,
+          `  secreto    ${PRIVATE_SECRET} en GitHub`,
+          "  pública    plugins.updater.pubkey en tauri.conf.json",
+          "",
+          "La llave no se muestra en ningún momento. Sin contraseña: la protege dónde vive.",
+          "",
+        ].join("\n"),
+      );
+      if (!(await goAhead("¿Generarla?", yes))) return;
+      generateKeyWithTauri(root, state.backup.dir);
+      const generated = inspectUpdater(root, gh) ?? state;
+      const pub = generated.backup.pubText;
+      if (!pub) throw new StarError(`tauri no dejó la pública en ${state.backup.dir}.`);
+      writePubkey(generated, pub);
+      uploadKey(generated, gh);
+      console.log(
+        [
+          `✓ Llave generada.`,
+          `  ${PRIVATE_SECRET} guardado en GitHub.`,
+          "  La pública quedó en tauri.conf.json: commitéala.",
+          `  El respaldo está en ${state.backup.dir}. Pásalo a tu gestor de contraseñas:`,
+          "  si se pierde, las apps instaladas no se pueden volver a actualizar.",
+        ].join("\n"),
+      );
+      return;
+    }
+  }
+}
+
 function initChangelog(root: string) {
   const path = join(root, "CHANGELOG.md");
   // Un changelog que ya existe tiene la historia de la app: nunca se pisa.
@@ -485,6 +567,7 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
   const into = takeOption(args, "--into");
   const notesFile = takeOption(args, "--notes-file");
   const platforms = takeOption(args, "--platforms");
+  const importFrom = takeOption(args, "--import");
   const [command, sub, arg] = args;
 
   switch (command) {
@@ -522,7 +605,10 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
     case "init":
       if (sub === "hooks") return initHooks(root, yes);
       if (sub === "changelog") return initChangelog(root);
-      throw new StarError(`"init ${sub ?? ""}" no existe. Usa init hooks o init changelog.`);
+      if (sub === "updater") return initUpdater(root, yes, importFrom);
+      throw new StarError(
+        `"init ${sub ?? ""}" no existe. Usa init hooks, init changelog o init updater.`,
+      );
     case "hook":
       return hook(root, sub, arg);
     case "lint":
