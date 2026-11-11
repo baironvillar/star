@@ -37,6 +37,10 @@ jobs:
 
       - run: bunx vp test run
 
+      # Las plantillas se copian a la app tal cual: sus tests corren con bun,
+      # como los va a correr la app.
+      - run: bun test templates
+
       # El CLI se usa a sí mismo: los manifiestos del kit tienen que coincidir.
       - run: bun src/cli.ts version
 

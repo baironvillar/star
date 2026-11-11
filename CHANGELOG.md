@@ -8,6 +8,15 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ### Agregado
 
+- `star init relay`: copia a `relay/` el relay de reportes, un Cloudflare
+  Worker que convierte los reportes de crash y el feedback de la app en issues
+  de GitHub. Guarda el token del lado del servidor, limita por dirección y
+  agrupa los crashes repetidos. Llena el nombre de la app y el repo, y no pisa
+  un `relay/` que ya existe. Los pasos para ponerlo en marcha están en el README
+  que copia.
+
+### Agregado
+
 - `star init updater`: para una app de Tauri, genera la llave del updater (sin
   contraseña) con un respaldo en `~/.star/keys/<identifier>/`, la sube como
   secreto `TAURI_SIGNING_PRIVATE_KEY` y escribe la llave pública en
