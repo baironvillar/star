@@ -5,6 +5,7 @@ import {
   checkPullRequest,
   checkPush,
   checkSubject,
+  checkTitle,
   subjectOf,
 } from "./conventions.ts";
 
@@ -120,5 +121,19 @@ describe("checkPush", () => {
 
   it("protege la base que diga la configuración", () => {
     expect(checkPush(line("refs/heads/trunk"), "trunk")[0]?.verdict.ok).toBe(false);
+  });
+});
+
+describe("checkTitle", () => {
+  it("el título de un PR es el asunto del squash: misma regla que un commit", () => {
+    expect(checkTitle("feat(lint): check the pull request title").ok).toBe(true);
+    expect(checkTitle("0.6.0").ok).toBe(true);
+    // Lo que propone GitHub con varios commits: el nombre de la rama.
+    expect(checkTitle("Feat/squash message").ok).toBe(false);
+    expect(checkTitle("feat: add a thing.").ok).toBe(false);
+  });
+
+  it("los espacios que deja el formulario de GitHub no cuentan", () => {
+    expect(checkTitle("  fix: keep the tag  \n").ok).toBe(true);
   });
 });

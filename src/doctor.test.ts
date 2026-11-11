@@ -8,9 +8,10 @@ import { diagnose, type Finding, releaseTask } from "./doctor.ts";
 import type { Gh } from "./gh.ts";
 import type { Git } from "./git.ts";
 import { hookScript } from "./hooks.ts";
+import { type MergeSettings, WANTED } from "./merge-settings.ts";
 import { fakeGit } from "./testing/fake-git.ts";
 
-const gh = (available = true): Gh => ({
+const gh = (available = true, settings: MergeSettings | null = WANTED): Gh => ({
   available: () => available,
   createPr: () => "",
   findPr: () => null,
@@ -19,6 +20,8 @@ const gh = (available = true): Gh => ({
   downloadAsset: () => null,
   secretNames: () => [],
   setSecret: () => {},
+  mergeSettings: () => settings,
+  updateMergeSettings: () => {},
 });
 
 /** Una app en orden: la que deja star después de adoptarlo entero. */
@@ -52,7 +55,8 @@ function app(files: Record<string, string> = {}): string {
     ".githooks/pre-push": hookScript("pre-push"),
     "vite.config.ts":
       'export default { run: { tasks: { release: { command: "bunx star release", cache: false } } } };\n',
-    ".github/workflows/ci.yml": 'steps:\n  - run: bunx star lint commits "$A..$B"\n',
+    ".github/workflows/ci.yml":
+      'steps:\n  - run: bunx star lint commits "$A..$B"\n  - run: bunx star lint title "$T"\n',
     ...files,
   };
   for (const [path, text] of Object.entries(all)) {
@@ -132,7 +136,7 @@ describe("diagnose", () => {
       "error changelog → bunx star init changelog",
       "warn hooks → bunx star init hooks",
       "warn hooks → bunx star init hooks",
-      `warn ci → un workflow que corra la puerta, bunx star lint commits y bunx star lint branch`,
+      "warn ci → un workflow que corra la puerta y bunx star lint commits, branch y title",
       "warn github → ",
     ]);
   });
@@ -175,6 +179,34 @@ describe("diagnose", () => {
     expect(problems(diagnose({ root: app(), git, gh: gh() })).join("\n")).toMatch(
       /error github: origin no tiene la rama develop/,
     );
+  });
+
+  it("los ajustes de merge que GitHub trae por defecto: avisa y propone star init github", () => {
+    const defaults = {
+      allowSquash: true,
+      squashTitle: "COMMIT_OR_PR_TITLE",
+      squashMessage: "COMMIT_MESSAGES",
+    };
+    const findings = diagnose({ root: app(), git: healthyGit(), gh: gh(true, defaults) });
+    const merge = findings.filter((f) => f.area === "github" && f.level !== "ok");
+    expect(merge).toHaveLength(1);
+    expect(merge[0]?.message).toMatch(/varios commits no sale solo/);
+    expect(merge[0]?.message).toMatch(/asunto del squash: .* → el título del PR/);
+    expect(merge[0]?.fix).toBe("bunx star init github");
+  });
+
+  it("si no puede leer los ajustes de merge, lo dice sin frenar", () => {
+    const found = problems(diagnose({ root: app(), git: healthyGit(), gh: gh(true, null) }));
+    expect(found).toEqual([expect.stringMatching(/^warn github: no se pudieron leer/)]);
+  });
+
+  it("una CI que no revisa el título del PR avisa", () => {
+    const root = app({
+      ".github/workflows/ci.yml": 'steps:\n  - run: bunx star lint commits "$A..$B"\n',
+    });
+    expect(problems(diagnose({ root, git: healthyGit(), gh: gh() }))).toEqual([
+      expect.stringMatching(/^warn ci: la CI no revisa el título del PR/),
+    ]);
   });
 
   it("sin package.json, lo dice en vez de caerse", () => {

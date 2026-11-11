@@ -157,3 +157,28 @@ por `-p`, y en argv la vería cualquier proceso del usuario. Una contraseña
 también habría que respaldarla, y guardarla al lado de la llave no protege
 nada. La llave se protege por dónde vive: los secretos de GitHub y el
 respaldo.
+
+## 18. El squash sale del título y la descripción del PR
+
+GitHub arma el mensaje de un _squash and merge_ según cuántos commits tiene el
+PR. Con lo que trae por defecto, un PR con un commit usa el asunto y el cuerpo
+de ese commit; uno con varios usa el título del PR como asunto y una lista de
+los commits como cuerpo, y la descripción del PR no aparece. En star y
+Starless "funcionaba solo" porque cada PR tenía un commit; el primer PR de
+albion-calculator, con dos, dejó el mensaje por escribir a mano.
+
+star le pide al repo que el squash salga **siempre** del título y la
+descripción del PR (`PR_TITLE` y `PR_BODY`), tenga los commits que tenga:
+
+- `star init github` cambia esos ajustes del repo. Es un cambio fuera de la
+  app, en un repo que puede ser de más gente, así que muestra qué cambia y
+  pregunta. Después los vuelve a leer: un cambio que GitHub acepta pero no
+  guarda no se da por hecho.
+- Con eso, el título del PR es el asunto del commit que llega a la base, y
+  ningún hook lo puede revisar porque se escribe en GitHub. `star lint title`
+  lo revisa en la CI, con la misma regla que un commit, en un workflow que
+  corre también cuando se edita el título.
+- `doctor` avisa si el repo no tiene esos ajustes, o si la CI no revisa el
+  título.
+- `star release finish` no depende de esto: le pasa a GitHub el asunto exacto
+  (la versión) y un cuerpo vacío.

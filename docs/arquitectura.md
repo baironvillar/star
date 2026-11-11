@@ -137,6 +137,11 @@ exec bunx star hook commit-msg "$@"
   de Linux o macOS git los ignora con un aviso. En Windows, además, se apaga
   `core.filemode` si está prendido: con el disco sin el bit, git vería los
   hooks cambiados a 644 y un `git add -A` desharía el `--chmod`.
+- **El título del PR es un asunto más.** Con los ajustes que pone
+  `star init github` (decisión 18), GitHub arma el squash con el título y la
+  descripción del PR, así que `star lint title` revisa el título en la CI, en
+  un workflow con `pull_request: types: [opened, edited, synchronize,
+  reopened]`: un título se puede cambiar sin empujar nada.
 - **Una app con historia** le dice a `star lint commits` desde dónde rige la
   regla (`"star": { "lint": { "since", "skip" } }`), y lo de antes no se revisa
   (decisión 14).

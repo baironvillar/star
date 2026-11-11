@@ -6,6 +6,7 @@ import { StarError } from "./errors.ts";
 import type { Gh } from "./gh.ts";
 import type { Git } from "./git.ts";
 import { HOOK_NAMES, HOOKS_DIR, inspectHooks } from "./hooks.ts";
+import { mergeChanges } from "./merge-settings.ts";
 import { inspectUpdater, planUpdater, PRIVATE_SECRET } from "./updater-init.ts";
 import { currentVersion, disagreements, inspect } from "./version.ts";
 
@@ -220,7 +221,7 @@ function ci(root: string): Finding[] {
       warn(
         "ci",
         "no hay workflows en .github/workflows: nada revisa los PR",
-        "un workflow que corra la puerta, bunx star lint commits y bunx star lint branch",
+        "un workflow que corra la puerta y bunx star lint commits, branch y title",
       ),
     ];
   }
@@ -244,6 +245,18 @@ function ci(root: string): Finding[] {
           "bunx star lint commits y bunx star lint branch en el workflow de los PR",
         ),
   );
+  // Con los ajustes que pide star, el título del PR es el asunto del commit
+  // que llega a la base. Un título fuera de la convención no lo frena ningún
+  // hook: se escribe en GitHub.
+  if (!texts.some((t) => /(?:\bstar|cli\.ts)\s+lint\s+title\b/.test(t))) {
+    findings.push(
+      warn(
+        "ci",
+        "la CI no revisa el título del PR, que es el asunto del squash",
+        'bunx star lint title "$PR_TITLE" en un workflow con pull_request: types [opened, edited, synchronize, reopened]',
+      ),
+    );
+  }
   findings.push(...workflowVersions(root, texts));
   return findings;
 }
@@ -291,16 +304,47 @@ function remote(git: Git, gh: Gh, root: string): Finding[] {
       findings.push(error("github", `origin no tiene la rama ${base}, de donde sale cada versión`));
     }
   }
-  findings.push(
-    gh.available()
-      ? ok("github", "gh tiene sesión")
-      : warn(
-          "github",
-          "gh no está instalado o no tiene sesión: release no puede abrir ni mergear el PR",
-          "gh auth login",
-        ),
-  );
+  if (!gh.available()) {
+    findings.push(
+      warn(
+        "github",
+        "gh no está instalado o no tiene sesión: release no puede abrir ni mergear el PR",
+        "gh auth login",
+      ),
+    );
+    return findings;
+  }
+  findings.push(ok("github", "gh tiene sesión"));
+  if (git.getConfig("remote.origin.url") !== null) findings.push(...mergeSettings(gh));
   return findings;
+}
+
+/**
+ * Cómo arma GitHub el squash. Con lo que trae por defecto, el mensaje sale del
+ * commit sólo si el PR tiene uno; con más, hay que escribirlo a mano al
+ * mergear. Ver la decisión 18.
+ */
+function mergeSettings(gh: Gh): Finding[] {
+  const settings = gh.mergeSettings();
+  if (!settings) {
+    return [
+      warn(
+        "github",
+        "no se pudieron leer los ajustes de merge del repo (sin permiso de escritura GitHub no los muestra)",
+      ),
+    ];
+  }
+  const changes = mergeChanges(settings);
+  if (changes.length === 0) {
+    return [ok("github", "el squash sale del título y la descripción del PR")];
+  }
+  return [
+    warn(
+      "github",
+      `el squash de un PR con varios commits no sale solo: ${changes.map((c) => c.description).join("; ")}`,
+      "bunx star init github",
+    ),
+  ];
 }
 
 /**

@@ -1,0 +1,33 @@
+name: PR title
+
+# El título del PR es el asunto del commit que llega a develop al mergear con
+# squash (ver la decisión 18). Va aparte del CI porque tiene que correr también
+# cuando se edita el título, y un cambio de título no tiene por qué repetir los
+# tests ni cancelar los que están corriendo.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: Pull request title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      # Por env y no interpolado en el script: el título lo escribe cualquiera
+      # que abra un PR, y dentro de `run:` sería código.
+      - run: bun src/cli.ts lint title "$PR_TITLE"
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}

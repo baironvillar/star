@@ -6,6 +6,18 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Agregado
+
+- `star init github`: ajusta el repo en GitHub para que el squash de un PR salga
+  de su título y su descripción, tenga uno o varios commits. Con lo que GitHub
+  trae por defecto, un PR con varios commits dejaba el mensaje por escribir a
+  mano. Muestra el cambio y pregunta antes.
+- `star lint title <título>`: revisa en la CI que el título del PR cumpla la
+  convención, porque con esos ajustes es el asunto del commit que llega a la
+  base.
+- `star doctor` avisa si el repo no arma el squash desde el PR, o si la CI no
+  revisa el título.
+
 ## [0.5.1] - 2026-11-11
 
 ### Corregido
