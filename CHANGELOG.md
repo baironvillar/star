@@ -6,6 +6,21 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Agregado
+
+- `"star": { "lint": { "since": "<commit>", "skip": ["<commit>"] } }`: la
+  historia que `star lint commits` no revisa, para una app que adopta la
+  convención con commits viejos que no la cumplen. `since` saca ese commit y
+  sus ancestros; `skip`, commits sueltos.
+- `verify.yml` devuelve `commit`: el sha del commit etiquetado, para la app que
+  lo compila adentro.
+
+### Cambiado
+
+- `star lint branch <rama> --into <base>` rechaza un pull request que no va a
+  la base (ni de la base a `main`). Un PR encima de otro se mergea en la rama
+  del otro y, si el de abajo ya entró, el cambio no llega nunca a la base.
+
 ## [0.4.0] - 2026-11-10
 
 ### Agregado

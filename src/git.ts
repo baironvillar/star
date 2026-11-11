@@ -27,10 +27,15 @@ export type Git = {
   fetch(): boolean;
   /** El asunto del commit de HEAD. */
   headSubject(): string;
+  /** El sha del commit al que apunta `rev` (pela un tag anotado), o `null` si no está. */
+  commitOf(rev: string): string | null;
   /** El mensaje entero de un commit, o `null` si ese commit no está en el clon. */
   commitMessage(rev: string): string | null;
-  /** Los commits de `base..head` sin los merges, del más nuevo al más viejo. */
-  commitsBetween(base: string, head: string): string[];
+  /**
+   * Los commits de `base..head` sin los merges, del más nuevo al más viejo.
+   * Con `exclude`, sin ese commit ni sus ancestros.
+   */
+  commitsBetween(base: string, head: string, exclude?: string): string[];
   /** El valor de una clave de `git config`, o `null` si no está. */
   getConfig(key: string): string | null;
   setConfig(key: string, value: string): void;
@@ -102,6 +107,10 @@ export function gitIn(cwd: string): Git {
     },
     fetch: () => run(["fetch", "--quiet", "origin"], 60_000).status === 0,
     headSubject: () => run(["log", "-1", "--format=%s"]).out,
+    commitOf(rev) {
+      const r = run(["rev-parse", "--verify", "-q", `${rev}^{commit}`]);
+      return r.status === 0 ? r.out : null;
+    },
     commitMessage(rev) {
       // `-e` antes: `git log` de un sha que no existe falla con un error largo, y
       // "ese commit no está" es una respuesta, no un error.
@@ -110,8 +119,13 @@ export function gitIn(cwd: string): Git {
       // pipe de PowerShell recodifica el texto.
       return run(["log", "-1", "--format=%B", rev]).out;
     },
-    commitsBetween(base, head) {
-      const r = run(["rev-list", "--no-merges", `${base}..${head}`]);
+    commitsBetween(base, head, exclude) {
+      const r = run([
+        "rev-list",
+        "--no-merges",
+        `${base}..${head}`,
+        ...(exclude ? ["--not", exclude] : []),
+      ]);
       if (r.status !== 0) throw new StarError(`git no pudo listar ${base}..${head}:\n${r.err}`);
       return r.out ? r.out.split(/\r?\n/) : [];
     },

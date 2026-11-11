@@ -74,26 +74,65 @@ export function installHooks(
   return { fileModeOff };
 }
 
-export type CommitResult = { sha: string; subject: string; verdict: Verdict };
+export type CommitResult = {
+  sha: string;
+  subject: string;
+  verdict: Verdict;
+  /** Un commit viejo que la app anotó en `star.lint.skip`: no se revisa. */
+  skipped?: boolean;
+};
+
+/**
+ * Lo que una app que ya existía le pide al lint: no revisar la historia de
+ * antes de adoptar la convención (decisión 14).
+ */
+export type LintHistory = {
+  /** El commit desde el que rige la regla: ni él ni sus ancestros se revisan. */
+  since?: string;
+  /** Commits sueltos que ya estaban y no se pueden reescribir. */
+  skip?: string[];
+};
 
 /**
  * Los commits nuevos de un push o de un PR, revisados.
  *
  * `base..head`, o un solo commit. La primera vez que se empuja una rama el
  * `base` viene en ceros, y después de un force-push puede no estar en el clon:
- * en los dos casos se mira sólo la punta, que es lo único que se sabe nuevo.
+ * en los dos casos se mira sólo la punta, que es lo único que se sabe nuevo. Si
+ * la app dice desde dónde rige la regla (`since`), se mira desde ahí.
+ *
+ * Un PR de `develop` a `main` arrastra toda la historia que `main` no tiene, y
+ * en una app que adoptó la convención con historia escrita esa historia no la
+ * cumple: sin `since` y `skip`, ese PR no podría pasar nunca (le pasó a
+ * Starless).
  */
-export function lintCommits(git: Git, spec: string): { onlyTip: boolean; results: CommitResult[] } {
+export function lintCommits(
+  git: Git,
+  spec: string,
+  history: LintHistory = {},
+): { onlyTip: boolean; results: CommitResult[] } {
   const [base, head] = spec.includes("..") ? spec.split("..", 2) : [undefined, spec];
   const tip = head || "HEAD";
   const known = Boolean(base) && !/^0+$/.test(base ?? "") && git.commitMessage(base ?? "") !== null;
-  const shas = known && base ? git.commitsBetween(base, tip) : [tip];
+  const { since, skip = [] } = history;
+  let shas: string[];
+  if (known && base) shas = git.commitsBetween(base, tip, since);
+  else if (since) shas = git.commitsBetween(since, tip);
+  else shas = [tip];
   const results = shas.map((sha): CommitResult => {
+    if (skip.some((s) => s.length >= 7 && sha.startsWith(s))) {
+      return {
+        sha,
+        subject: subjectOf(git.commitMessage(sha) ?? ""),
+        verdict: { ok: true },
+        skipped: true,
+      };
+    }
     const message = git.commitMessage(sha);
     if (message === null) {
       return { sha, subject: "", verdict: { ok: false, reason: `${sha} no está en este clon` } };
     }
     return { sha, subject: subjectOf(message), verdict: checkMessage(message) };
   });
-  return { onlyTip: base !== undefined && !known, results };
+  return { onlyTip: base !== undefined && !known && !since, results };
 }
