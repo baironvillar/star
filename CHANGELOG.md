@@ -6,6 +6,8 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.5.1] - 2026-11-11
+
 ### Corregido
 
 - `tauri-release.yml` ya no falla antes de compilar cuando `build-env` se escribe
