@@ -6,6 +6,18 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Corregido
+
+- `tauri-release.yml` ya no falla antes de compilar cuando `build-env` se escribe
+  con `|`: la línea vacía del final hacía salir con error el paso que copia las
+  variables.
+- `tauri-release.yml` le da al MSI de una beta una versión numérica
+  (`0.7.0-beta.1` → `0.7.0.1`): WiX rechaza el sufijo y el empaquetado fallaba
+  después de compilar. La versión de la app, del tag y de `latest.json` no
+  cambia.
+- El último job de `tauri-release.yml` ya ve la release en borrador: con
+  `contents: read`, `star release check` decía "release not found".
+
 ## [0.5.0] - 2026-11-10
 
 ### Agregado

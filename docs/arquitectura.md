@@ -180,6 +180,11 @@ tag v* ──► verify.yml ──► web-release.yml    (app web: + jobs propio
      `latest.json`, apunta a un archivo de la release, su firma es la del `.sig`
      y las notas son las del CHANGELOG.
 
+  Una beta en Windows le pasa a Tauri `bundle.windows.wix.version` con la beta
+  como cuarto campo (`0.7.0-beta.1` → `0.7.0.1`), porque WiX sólo acepta
+  versiones numéricas. El job `check` tiene `contents: write` aunque sólo lee:
+  con `read` no ve los borradores.
+
   macOS se rechaza con un error que dice por qué. Una versión con sufijo
   (`0.7.0-beta.1`) sale como prerelease (decisión 16). Lo propio de la app
   (variables de la build, `--config`) entra por `build-env` y `args`.
