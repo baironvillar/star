@@ -6,6 +6,8 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.4.0] - 2026-11-10
+
 ### Agregado
 
 - `star init relay`: copia a `relay/` el relay de reportes, un Cloudflare
