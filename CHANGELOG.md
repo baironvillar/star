@@ -6,6 +6,8 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.5.0] - 2026-11-10
+
 ### Agregado
 
 - `"star": { "lint": { "since": "<commit>", "skip": ["<commit>"] } }`: la
