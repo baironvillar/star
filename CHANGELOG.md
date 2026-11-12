@@ -6,6 +6,8 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+## [0.7.0] - 2026-11-12
+
 ### Agregado
 
 - `"star": { "autoMerge": true }` en el `package.json` de la app: `star release`

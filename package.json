@@ -1,6 +1,6 @@
 {
   "name": "@baironvillar/star",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Kit de releases para apps con Vite: SaaS web y escritorio con Tauri 2",
   "bin": {
