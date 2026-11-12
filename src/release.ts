@@ -1,10 +1,11 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { changelogSection, copyUnreleased, promoteUnreleased, readChangelog } from "./changelog.ts";
+import { type Clock, waitForChecks } from "./ci-wait.ts";
 import { STAR } from "./command.ts";
 import { readConfig } from "./config.ts";
 import { StarError } from "./errors.ts";
-import type { Gh, PullRequest } from "./gh.ts";
+import type { Gh } from "./gh.ts";
 import type { Git } from "./git.ts";
 import { hasOwnVersion } from "./manifests/types.ts";
 import type { Readiness } from "./readiness.ts";
@@ -64,55 +65,7 @@ export type ReleaseDeps = {
   /** Corre los comandos de la puerta en orden. Devuelve si pasaron todos. */
   runGate(commands: string[]): boolean;
   today(): string;
-  /** Espera; en los tests, nada. */
-  sleep(ms: number): Promise<void>;
-  /** Milisegundos desde el epoch: para el límite de la espera. */
-  now(): number;
-};
-
-/** Cada cuánto se le pregunta a GitHub por el CI. */
-export const POLL_MS = 15_000;
-/** Cuánto se espera a que un PR recién abierto tenga checks. */
-export const CHECKS_GRACE_MS = 60_000;
-/** Cuánto se espera al CI antes de rendirse. */
-export const WAIT_LIMIT_MS = 30 * 60_000;
-
-/**
- * Espera a que el CI del PR termine, y devuelve el PR como quedó.
- *
- * Un PR recién abierto no tiene checks por unos segundos, hasta que GitHub
- * agenda los workflows: "sin checks" se toma como "todavía no" durante
- * `CHECKS_GRACE_MS`, y después como lo que es. Al pasar `WAIT_LIMIT_MS` se
- * rinde sin tocar nada: el PR sigue ahí para `star release finish`.
- */
-export async function waitForChecks(
-  deps: Pick<ReleaseDeps, "gh" | "io" | "sleep" | "now">,
-  head: string,
-  version: string,
-): Promise<PullRequest | null> {
-  const { gh, io } = deps;
-  const start = deps.now();
-  let announced = false;
-  for (;;) {
-    const pr = gh.findPr(head);
-    if (!pr || pr.state !== "OPEN") return pr;
-    const elapsed = deps.now() - start;
-    const waiting = pr.checks === "pending" || (pr.checks === "none" && elapsed < CHECKS_GRACE_MS);
-    if (!waiting) return pr;
-    if (elapsed >= WAIT_LIMIT_MS) {
-      throw new StarError(
-        `el CI del PR #${pr.number} sigue corriendo después de ${WAIT_LIMIT_MS / 60_000} minutos. No se tocó nada: cuando termine, corre \`star release finish ${version}\`.`,
-      );
-    }
-    if (!announced) {
-      io.log(
-        `Esperando el CI del PR #${pr.number}… (con Ctrl+C lo dejas, y sigues con \`star release finish\`)`,
-      );
-      announced = true;
-    }
-    await deps.sleep(POLL_MS);
-  }
-}
+} & Clock;
 
 function fail(title: string, problems: string[]): never {
   throw new StarError(`${title}\n\n${problems.map((p) => `  - ${p}`).join("\n")}`);
@@ -398,7 +351,7 @@ export async function finishRelease(
     pr?.state === "OPEN" &&
     (pr.checks === "pending" || pr.checks === "none")
   ) {
-    pr = await waitForChecks(deps, head, version);
+    pr = await waitForChecks(deps, () => gh.findPr(head), `${STAR} release finish ${version}`);
   }
   if (!ghReady) {
     warnings.push(`sin gh no puedo ver el PR de ${head}: se asume que ya está mergeado.`);

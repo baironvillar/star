@@ -12,6 +12,7 @@
  *   star release beta               la beta siguiente (0.7.0-beta.2)
  *   star release finish [versión]   la mergea con el asunto exacto y empuja el tag
  *   star release check <tag>        revisa latest.json y las firmas de una release de escritorio
+ *   star pr merge [número]          espera el CI de un PR y lo mergea a la base con squash
  *   star init hooks                 instala commit-msg y pre-push en .githooks
  *   star init changelog             crea un CHANGELOG.md vacío, si no hay uno
  *   star init updater               llave del updater de Tauri: respaldo, secreto y pública
@@ -63,6 +64,7 @@ import { HOOKS_DIR, inspectHooks, installHooks, lintCommits } from "./hooks.ts";
 import { hasOwnVersion } from "./manifests/types.ts";
 import { confirm, ask, interactive } from "./prompt.ts";
 import { checkReady } from "./readiness.ts";
+import { mergePr } from "./pr.ts";
 import { finishRelease, prepareRelease, type ReleaseDeps } from "./release.ts";
 import {
   bump,
@@ -104,6 +106,9 @@ Uso:
   star release check <tag>     app de escritorio: latest.json tiene cada
                                plataforma (--platforms windows,linux), apunta a
                                archivos de la release y con sus firmas
+  star pr merge [número]       espera el CI del PR (el de la rama actual, si no
+                               dices cuál) y lo mergea a la base con squash: el
+                               título es el asunto y la descripción el cuerpo
   star init hooks              instala commit-msg y pre-push en .githooks y
                                apunta git ahí (core.hooksPath)
   star init changelog          crea un CHANGELOG.md con "## [Sin publicar]"
@@ -709,6 +714,9 @@ export async function main(argv: string[], root = process.cwd()): Promise<void> 
       return notes(root, sub);
     case "release":
       return release(root, sub, arg, yes, platforms, beta);
+    case "pr":
+      if (sub === "merge") return mergePr(releaseDeps(root, yes), arg);
+      throw new StarError(`"pr ${sub ?? ""}" no existe. Usa pr merge.`);
     case "init":
       if (sub === "hooks") return initHooks(root, yes);
       if (sub === "changelog") return initChangelog(root);

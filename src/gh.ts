@@ -12,6 +12,14 @@ export type PullRequest = {
   mergeable: boolean | null;
 };
 
+/** Un PR con lo que hace falta para mergearlo: título, descripción y ramas. */
+export type PullRequestDetail = PullRequest & {
+  title: string;
+  body: string;
+  base: string;
+  head: string;
+};
+
 /** Lo que el kit le pide a GitHub, a través de `gh`. Interfaz para probarlo con un doble. */
 export type Gh = {
   /** Si `gh` está instalado y con sesión. */
@@ -20,8 +28,10 @@ export type Gh = {
   createPr(input: { base: string; head: string; title: string; body: string }): string;
   /** El PR más reciente de esa rama, abierto o no. */
   findPr(head: string): PullRequest | null;
-  /** Squash and merge con el asunto exacto y sin cuerpo. */
-  mergeSquash(number: number, subject: string): void;
+  /** Un PR por número, o el de la rama actual si no se dice. `null` si no hay. */
+  viewPr(ref?: string): PullRequestDetail | null;
+  /** Squash and merge con el asunto exacto, y el cuerpo que se diga (vacío si no). */
+  mergeSquash(number: number, subject: string, body?: string): void;
   /** Los assets de la release de ese tag, también si es un borrador. */
   releaseAssets(tag: string): { id: number; name: string }[];
   /** El contenido de un asset como texto, o `null` si no está. */
@@ -154,17 +164,51 @@ export function ghIn(cwd: string): Gh {
           pr.mergeable === "MERGEABLE" ? true : pr.mergeable === "CONFLICTING" ? false : null,
       };
     },
-    mergeSquash(number, subject) {
+    viewPr(ref) {
       const r = run([
         "pr",
-        "merge",
-        String(number),
-        "--squash",
-        "--subject",
-        subject,
-        "--body",
-        "",
+        "view",
+        ...(ref ? [ref] : []),
+        "--json",
+        "number,url,state,mergeable,statusCheckRollup,title,body,baseRefName,headRefName",
       ]);
+      // gh sale con error cuando la rama no tiene PR: eso es "no hay", no una falla.
+      if (r.status !== 0) {
+        if (/no pull requests found|could not resolve/i.test(r.err)) return null;
+        throw new StarError(`gh no pudo leer el PR:
+${r.err}`);
+      }
+      const pr = JSON.parse(r.out) as {
+        number: number;
+        url: string;
+        state: PullRequest["state"];
+        mergeable: string;
+        statusCheckRollup: Rollup[] | null;
+        title: string;
+        body: string;
+        baseRefName: string;
+        headRefName: string;
+      };
+      return {
+        number: pr.number,
+        url: pr.url,
+        state: pr.state,
+        checks: summarizeChecks(pr.statusCheckRollup ?? []),
+        mergeable:
+          pr.mergeable === "MERGEABLE" ? true : pr.mergeable === "CONFLICTING" ? false : null,
+        title: pr.title,
+        body: pr.body ?? "",
+        base: pr.baseRefName,
+        head: pr.headRefName,
+      };
+    },
+    mergeSquash(number, subject, body = "") {
+      // El cuerpo por stdin, como al crear el PR: en Windows los saltos de
+      // línea no sobreviven en argv.
+      const r = run(
+        ["pr", "merge", String(number), "--squash", "--subject", subject, "--body-file", "-"],
+        body,
+      );
       if (r.status !== 0) throw new StarError(`gh no pudo mergear el PR #${number}:\n${r.err}`);
     },
     releaseAssets(tag) {

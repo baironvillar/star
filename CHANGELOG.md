@@ -8,6 +8,12 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ### Agregado
 
+- `star pr merge [número]`: espera el CI de un PR (el de la rama actual, si no
+  dices cuál) y lo mergea a la base con squash, con el título como asunto y la
+  descripción como cuerpo. No pregunta: mergear a la base es automático. Rechaza
+  antes de esperar un PR a `main`, el de una versión o un título fuera de la
+  convención, y no mergea si el CI falla o hay conflictos.
+
 - Con `autoMerge`, el PR de la versión se mergea solo a la base, pero antes de
   llevarla a `main` y empujar el tag star pregunta "¿Lanzar la x.y.z?". Con un
   no, queda en la base y se lanza después con `star release finish`.

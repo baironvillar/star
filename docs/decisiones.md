@@ -298,3 +298,26 @@ eso se pregunta, salvo que la app pida lo contrario.
 - **La decide el CLI, no el YAML.** `star verify` escribe `publish` según la
   configuración de la app, y los workflows sólo lo usan. Cierra la pregunta
   abierta 2 de [`alcance.md`](alcance.md) sin un `star publish` aparte.
+
+## 24. `star pr merge`: los PR del día los mergea star
+
+Mergear a la base es automático (decisión 23), pero sólo el PR de una versión
+lo mergeaba star; los demás se mergeaban a mano o con `gh`, y cada uno armaba
+el asunto a su manera.
+
+- **Un comando, no el auto-merge de GitHub.** Ése exige una regla con checks
+  requeridos en la base, y si lo activa un workflow, el merge lo hace el
+  `GITHUB_TOKEN` y no dispara los workflows del push a la base. `star pr merge`
+  corre en la terminal de quien lo llama (o del agente que abrió el PR), con su
+  sesión de `gh`.
+- **Espera el CI con lo mismo que `release`** (`src/ci-wait.ts`): cada 15
+  segundos, hasta 30 minutos, y "sin checks" cuenta como "todavía no" durante
+  el primer minuto.
+- **No pregunta.** Llamarlo es pedirlo, y mergear a la base no lanza nada.
+- **Revisa antes de esperar** lo que el CI no va a cambiar: que vaya a la base
+  y no a `main`, que no sea el PR de una versión (ése lo termina
+  `star release finish`, que además etiqueta) y que el título cumpla la
+  convención, porque es el asunto del commit.
+- **Squash con el título y la descripción** (decisión 18), aunque el repo no
+  esté configurado así: star le pasa los dos a GitHub.
+- Si estabas en la rama del PR, quedas en la base al día.

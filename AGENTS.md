@@ -48,6 +48,8 @@ src/version.ts          leer todos los manifiestos, planificar y aplicar la escr
 src/semver.ts           parsear y subir versiones, betas incluidas
 src/readiness.ts        los chequeos antes de un bump (git es una interfaz, se prueba con un doble)
 src/release.ts          star release (y sus betas) y star release finish (git y gh entran como dependencias)
+src/pr.ts               star pr merge: espera el CI de un PR y lo mergea a la base
+src/ci-wait.ts          esperar el CI de un PR, con el tiempo como dependencia
 src/verify.ts           star verify: todo lo que se revisa antes de construir un tag
 src/updater.ts          star release check: latest.json y firmas de una release de escritorio
 src/doctor.ts           star doctor: qué le falta a la app para publicar con star
