@@ -91,7 +91,8 @@ Uso:
   star version tag <tag>       falla si el tag no coincide con la versión
   star notes [versión]         las notas de esa versión en CHANGELOG.md
   star release [nivel]         prepara una versión desde develop: puerta, rama
-                               release/<versión>, bump, commit, push y PR
+                               release/<versión>, bump, commit, push y PR. Con
+                               "autoMerge": true espera el CI y termina sola
   star release <nivel> --beta  empieza una beta (0.6.0 → 0.7.0-beta.1). Sale como
                                prerelease: la app instalada no la ve
   star release beta            la beta siguiente (0.7.0-beta.1 → 0.7.0-beta.2).
@@ -293,6 +294,8 @@ function releaseDeps(root: string, yes: boolean): ReleaseDeps {
     gh: ghIn(root),
     runGate: (commands) => runGate(root, commands),
     today: () => today(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now: () => Date.now(),
     io: {
       log: (message) => console.log(message),
       warn: (message) => console.warn(`! ${message}`),

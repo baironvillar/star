@@ -9,10 +9,20 @@ export type Config = {
   gate: string[] | null;
   /** La historia que `star lint commits` no revisa. */
   lint: { since?: string; skip: string[] };
+  /**
+   * Si `star release` espera el CI del PR y lo termina solo (merge, main y
+   * tag), en vez de dejarlo para `star release finish`.
+   */
+  autoMerge: boolean;
 };
 
 type PackageJson = {
-  star?: { base?: unknown; gate?: unknown; lint?: { since?: unknown; skip?: unknown } };
+  star?: {
+    base?: unknown;
+    gate?: unknown;
+    lint?: { since?: unknown; skip?: unknown };
+    autoMerge?: unknown;
+  };
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
@@ -24,7 +34,7 @@ type PackageJson = {
  * porque una app sin Vite+ (Starless lintea con Biome) también tiene que poder
  * configurar su puerta.
  *
- * Sin configuración: la base es `develop`, y si la app usa Vite+ la puerta es
+ * Sin configuración: la base es `develop`, nada se mergea solo, y si la app usa Vite+ la puerta es
  * `vp check` y `vp test run`. Si no lo usa, no hay una puerta que adivinar.
  */
 export function readConfig(root: string): Config {
@@ -64,9 +74,14 @@ export function readConfig(root: string): Config {
     throw new StarError('"star.lint.skip" en package.json tiene que ser una lista de commits.');
   }
 
+  if (star.autoMerge !== undefined && typeof star.autoMerge !== "boolean") {
+    throw new StarError('"star.autoMerge" en package.json tiene que ser true o false.');
+  }
+
   return {
     base: star.base ?? "develop",
     gate,
     lint: { since: lint.since, skip: (lint.skip as string[] | undefined) ?? [] },
+    autoMerge: star.autoMerge ?? false,
   };
 }

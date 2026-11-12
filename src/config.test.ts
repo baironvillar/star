@@ -22,6 +22,7 @@ describe("readConfig", () => {
       base: "develop",
       gate: ["vp check", "vp test run"],
       lint: { skip: [] },
+      autoMerge: false,
     });
   });
 
@@ -34,11 +35,18 @@ describe("readConfig", () => {
       base: "main",
       gate: ["vp run verify"],
       lint: { skip: [] },
+      autoMerge: false,
     });
     expect(readConfig(withPackage({ star: { gate: ["biome check", "bun test"] } })).gate).toEqual([
       "biome check",
       "bun test",
     ]);
+  });
+
+  it("lee autoMerge, que por defecto está apagado", () => {
+    expect(readConfig(withPackage({ star: { autoMerge: true } })).autoMerge).toBe(true);
+    expect(readConfig(withPackage({})).autoMerge).toBe(false);
+    expect(() => readConfig(withPackage({ star: { autoMerge: "sí" } }))).toThrow(StarError);
   });
 
   it("lee la historia que el lint no revisa", () => {
