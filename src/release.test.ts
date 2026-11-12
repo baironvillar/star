@@ -146,6 +146,8 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
     git(work, "add", ".");
     git(work, "commit", "--quiet", "-m", "chore: start");
     git(work, "push", "--quiet", "-u", "origin", "develop");
+    // Como lo deja `star init github`: main y develop desde el mismo commit.
+    git(work, "push", "--quiet", "origin", "develop:main");
     return { work, origin };
   }
 
@@ -217,6 +219,18 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
     expect(git(work, "branch", "--show-current")).toBe("develop");
     expect(git(origin, "tag", "--list")).toBe("v0.2.0");
     expect(git(origin, "rev-list", "-n", "1", "v0.2.0")).toBe(git(origin, "rev-parse", "develop"));
+    // main recibe la versión en un merge commit que se llama como ella, con
+    // develop como segundo padre: ningún PR tuvo que hacer merge commit.
+    expect(git(origin, "log", "-1", "--format=%s", "main")).toBe("0.2.0");
+    expect(git(origin, "rev-parse", "main^2")).toBe(git(origin, "rev-parse", "develop"));
+
+    // Un segundo finish (uno que se cortó después del push a main) no duplica el merge.
+    git(work, "push", "--quiet", "--delete", "origin", "v0.2.0");
+    git(work, "tag", "-d", "v0.2.0");
+    const before = git(origin, "rev-parse", "main");
+    await finishRelease(deps(work, merged, []), "0.2.0");
+    expect(git(origin, "rev-parse", "main")).toBe(before);
+    expect(git(origin, "tag", "--list")).toBe("v0.2.0");
   });
 
   it("una beta copia las notas y las deja para la versión final", async () => {
@@ -241,6 +255,8 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
     git(work, "switch", "--quiet", "release/0.2.0-beta.1");
     await finishRelease(deps(work, merged, []));
     expect(git(origin, "tag", "--list")).toBe("v0.2.0-beta.1");
+    // Una beta no llega a main.
+    expect(git(origin, "log", "-1", "--format=%s", "main")).toBe("chore: start");
   });
 
   it("no etiqueta un commit mergeado a mano con el número del PR en el asunto", async () => {

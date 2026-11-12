@@ -31,6 +31,15 @@ export function fakeGit(overrides: Partial<Git> = {}): Git & { calls: string[] }
     addExecutable: record("addExecutable"),
     indexModes: () => ({}),
     trackedMatching: () => [],
+    hasCommits: () => true,
+    isAncestor: () => true,
+    rootCommit: () => null,
+    commitFiles: (files, message) => {
+      calls.push(`commitFiles ${files.map((x) => x.path).join(" ")} ${message}`);
+      return "root";
+    },
+    setBranch: record("setBranch"),
+    mergeNoFf: record("mergeNoFf"),
     switchCreate: record("switchCreate"),
     switchTo: record("switchTo"),
     pullFastForward: record("pullFastForward"),

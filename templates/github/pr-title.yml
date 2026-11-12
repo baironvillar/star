@@ -1,0 +1,32 @@
+name: PR title
+
+# Escrito por `star init github`. El título del PR es el asunto del commit que
+# llega a la base (el repo hace squash desde el título y la descripción). Va
+# aparte de la CI porque tiene que correr también cuando se edita el título, y
+# eso no tiene por qué repetir los tests.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: Pull request title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      # Por env y no interpolado: el título lo escribe quien abre el PR, y
+      # dentro de `run:` sería código.
+      - run: bunx star lint title "$PR_TITLE"
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}

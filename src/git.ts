@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { StarError } from "./errors.ts";
 
 /**
@@ -45,6 +48,21 @@ export type Git = {
   indexModes(paths: string[]): Record<string, string>;
   /** Los archivos commiteados cuyo contenido calza con la expresión (ERE de git grep). */
   trackedMatching(pattern: string): string[];
+  /** Si la rama actual ya tiene algún commit (en un repo recién creado, no). */
+  hasCommits(): boolean;
+  /** Si `ancestor` está en la historia de `descendant`; `null` si alguno no existe. */
+  isAncestor(ancestor: string, descendant: string): boolean | null;
+  /** El primer commit de la historia de `ref`, o `null` si no está. */
+  rootCommit(ref: string): string | null;
+  /**
+   * Un commit sin padres con exactamente esos archivos, armado en un índice
+   * aparte: no toca el stage ni el árbol de quien lo corre. Devuelve el sha.
+   */
+  commitFiles(files: { path: string; content: string }[], message: string): string;
+  /** Apunta la rama a ese commit (`update-ref`), exista o no. */
+  setBranch(name: string, sha: string): void;
+  /** Merge con commit propio y ese asunto. Si choca, lo aborta y lanza. */
+  mergeNoFf(ref: string, message: string): void;
 
   switchCreate(name: string): void;
   switchTo(name: string): void;
@@ -144,6 +162,51 @@ export function gitIn(cwd: string): Git {
         if (path && mode) modes[path] = mode;
       }
       return modes;
+    },
+    hasCommits: () => run(["rev-parse", "-q", "--verify", "HEAD"]).status === 0,
+    isAncestor(ancestor, descendant) {
+      const r = run(["merge-base", "--is-ancestor", ancestor, descendant]);
+      return r.status === 0 ? true : r.status === 1 ? false : null;
+    },
+    rootCommit(ref) {
+      const r = run(["rev-list", "--max-parents=0", ref]);
+      return r.status === 0 && r.out ? (r.out.split(/\r?\n/).at(-1) ?? null) : null;
+    },
+    commitFiles(files, message) {
+      // Un índice propio en vez del de la app: en un repo recién creado, quien
+      // corre esto puede tener su trabajo en el stage, y ese trabajo no va en
+      // el commit inicial.
+      const index = join(tmpdir(), `star-index-${process.pid}-${Date.now()}`);
+      const env = { ...process.env, GIT_INDEX_FILE: index };
+      const step = (args: string[], input?: string) => {
+        const r = spawnSync("git", args, { cwd, encoding: "utf8", env, input });
+        if (r.status !== 0) {
+          throw new StarError(`git ${args[0]} falló:\n${(r.stderr ?? "").trim()}`);
+        }
+        return (r.stdout ?? "").trim();
+      };
+      try {
+        for (const file of files) {
+          const blob = step(["hash-object", "-w", "--stdin"], file.content);
+          step(["update-index", "--add", "--cacheinfo", `100644,${blob},${file.path}`]);
+        }
+        const tree = step(["write-tree"]);
+        return step(["commit-tree", tree, "-m", message]);
+      } finally {
+        rmSync(index, { force: true });
+      }
+    },
+    setBranch: (name, sha) => must(["update-ref", `refs/heads/${name}`, sha]),
+    mergeNoFf(ref, message) {
+      const r = spawnSync("git", ["merge", "--no-ff", "--no-edit", "-m", message, ref], {
+        cwd,
+        encoding: "utf8",
+      });
+      if (r.status !== 0) {
+        // Un merge a medias deja la rama en un estado que nadie pidió.
+        spawnSync("git", ["merge", "--abort"], { cwd });
+        throw new StarError(`git no pudo mergear ${ref}:\n${(r.stdout ?? "").trim()}`);
+      }
     },
     trackedMatching(pattern) {
       // `-I` salta los binarios. git grep sale con 1 cuando no encuentra nada.

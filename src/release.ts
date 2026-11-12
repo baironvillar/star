@@ -26,12 +26,19 @@ import {
  * que no se puede crear hasta después del merge.
  *
  *   star release minor     desde develop: chequeos, puerta, rama, bump, commit, push y PR
- *   star release finish    cuando el CI pasa: squash con el asunto exacto, tag y push
+ *   star release finish    cuando el CI pasa: squash con el asunto exacto, main, tag y push
  *
  * `finish` mergea el PR él mismo para que el asunto sea la versión y nada más.
  * Mergeado a mano, GitHub le agrega el número del PR, y el workflow de release
  * rechaza ese commit: GitHub titula la corrida de un tag con su asunto.
+ *
+ * **`main` la actualiza `finish`** (decisión 19): un merge commit de la base
+ * con la versión como asunto. Así ningún PR necesita merge commit, y el repo
+ * puede permitir sólo squash. Las betas no llegan a `main`.
  */
+
+/** La rama de lo publicado. Fija, como en `star lint`. */
+export const MAIN = "main";
 
 export type Io = {
   log(message: string): void;
@@ -302,6 +309,12 @@ export async function finishRelease(deps: ReleaseDeps, versionArg?: string): Pro
   const problems: string[] = [];
   const warnings: string[] = [];
   checkTag(git, tag, problems, warnings);
+  const stable = !isPrerelease(version);
+  if (stable && git.remoteBranchExists(MAIN) === false) {
+    problems.push(
+      `origin no tiene ${MAIN}, donde llega cada versión: corre \`bunx star init github\`.`,
+    );
+  }
   const dirty = trackedChanges(git.dirty(), []);
   if (dirty.length > 0) problems.push("hay cambios sin commitear: commitéalos o guárdalos antes.");
 
@@ -330,10 +343,11 @@ export async function finishRelease(deps: ReleaseDeps, versionArg?: string): Pro
   if (problems.length > 0) fail(`La ${version} todavía no se puede terminar:`, problems);
 
   const merge = pr?.state === "OPEN" ? pr : null;
+  const toMain = stable ? `, se lleva a ${MAIN}` : "";
   io.log(
     merge
-      ? `\nSe mergea el PR #${merge.number} con squash como "${version}", se actualiza ${config.base} y se empuja ${tag}.\n`
-      : `\nSe actualiza ${config.base} y se empuja ${tag} sobre su último commit.\n`,
+      ? `\nSe mergea el PR #${merge.number} con squash como "${version}", se actualiza ${config.base}${toMain} y se empuja ${tag}.\n`
+      : `\nSe actualiza ${config.base}${toMain} y se empuja ${tag} sobre su último commit.\n`,
   );
   if (!(await io.confirm(`¿Terminar la ${version}?`))) {
     io.log("No se cambió nada.");
@@ -362,7 +376,37 @@ export async function finishRelease(deps: ReleaseDeps, versionArg?: string): Pro
   }
   if (after.length > 0) fail(`No se creó el tag ${tag}:`, after);
 
+  if (stable) publishToMain(git, config.base, version, io);
+
   git.tag(tag, version);
   git.push(["origin", tag]);
   io.log(`\n✓ ${tag} empujado. Desde acá sigue el workflow de release.\n`);
+}
+
+/**
+ * Lleva la base a `main` con un merge commit que se llama como la versión.
+ *
+ * Va antes del tag: si el push a `main` falla, no queda un tag publicado con
+ * `main` atrás, y volver a correr `finish` retoma desde acá. Si `main` ya tiene
+ * lo de la base (un `finish` que se cortó después del push), no hace nada.
+ *
+ * El push lleva `--no-verify`: el hook `pre-push` frena a las personas que
+ * empujan a `main`, y éste es el único camino previsto (decisión 19).
+ */
+function publishToMain(git: Git, base: string, version: string, io: Io) {
+  if (git.isAncestor(base, `origin/${MAIN}`) === true) return;
+  git.switchTo(MAIN);
+  try {
+    git.pullFastForward();
+    git.mergeNoFf(base, version);
+    git.push(["--no-verify", "origin", MAIN]);
+  } catch (error) {
+    git.switchTo(base);
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new StarError(
+      `No se pudo llevar la ${version} a ${MAIN}, y no se creó el tag. La versión ya está en ${base}: arregla lo de abajo y vuelve a correr \`star release finish ${version}\`.\n\n${detail}`,
+    );
+  }
+  git.switchTo(base);
+  io.log(`✓ ${MAIN} tiene la ${version}.`);
 }

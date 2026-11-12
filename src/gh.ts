@@ -30,7 +30,7 @@ export type Gh = {
   secretNames(): string[] | null;
   /** Guarda un secreto del repo. El valor va por stdin: nunca en argv ni en pantalla. */
   setSecret(name: string, value: string): void;
-  /** Cómo arma GitHub el squash en este repo, o `null` si no se pudo preguntar. */
+  /** Los ajustes de merge y la rama por defecto del repo, o `null` si no se pudo preguntar. */
   mergeSettings(): MergeSettings | null;
   /** Cambia ajustes del repo (`gh api -X PATCH`). Hace falta ser admin. */
   updateMergeSettings(fields: Record<string, string | boolean>): void;
@@ -40,6 +40,9 @@ type RepoJson = {
   allow_squash_merge?: boolean;
   squash_merge_commit_title?: string;
   squash_merge_commit_message?: string;
+  allow_merge_commit?: boolean;
+  allow_rebase_merge?: boolean;
+  default_branch?: string;
 };
 
 /**
@@ -52,7 +55,9 @@ export function parseMergeSettings(json: string): MergeSettings | null {
   if (
     typeof repo.allow_squash_merge !== "boolean" ||
     typeof repo.squash_merge_commit_title !== "string" ||
-    typeof repo.squash_merge_commit_message !== "string"
+    typeof repo.squash_merge_commit_message !== "string" ||
+    typeof repo.allow_merge_commit !== "boolean" ||
+    typeof repo.allow_rebase_merge !== "boolean"
   ) {
     return null;
   }
@@ -60,6 +65,10 @@ export function parseMergeSettings(json: string): MergeSettings | null {
     allowSquash: repo.allow_squash_merge,
     squashTitle: repo.squash_merge_commit_title,
     squashMessage: repo.squash_merge_commit_message,
+    allowMergeCommit: repo.allow_merge_commit,
+    allowRebase: repo.allow_rebase_merge,
+    // Un repo vacío no tiene rama por defecto todavía.
+    defaultBranch: repo.default_branch ?? "",
   };
 }
 

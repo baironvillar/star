@@ -141,7 +141,13 @@ exec bunx star hook commit-msg "$@"
   `star init github` (decisión 18), GitHub arma el squash con el título y la
   descripción del PR, así que `star lint title` revisa el título en la CI, en
   un workflow con `pull_request: types: [opened, edited, synchronize,
-  reopened]`: un título se puede cambiar sin empujar nada.
+  reopened]`: un título se puede cambiar sin empujar nada. `init github`
+  escribe ese workflow y la plantilla de PR desde `templates/github/`.
+- **El repo sólo permite squash** (decisión 19). `main` no recibe PRs: la
+  actualiza `star release finish` con un merge commit que se llama como la
+  versión, y lo empuja con `--no-verify`, porque el hook `pre-push` está para
+  frenar a las personas. Es, con el arranque de un repo vacío (decisión 20),
+  el único push a `main` que hace star.
 - **Una app con historia** le dice a `star lint commits` desde dónde rige la
   regla (`"star": { "lint": { "since", "skip" } }`), y lo de antes no se revisa
   (decisión 14).
