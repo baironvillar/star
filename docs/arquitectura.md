@@ -108,7 +108,7 @@ con Vite+ conviene apuntarla a una tarea cacheada (`"gate": "vp run verify"`):
 probado con Vite+ 1.5.0, un `vp run` anidado dentro de la tarea `release`
 funciona, y si nada cambió desde el último check sale de la caché. La tarea
 `release` no necesita `dependsOn`: star corre la puerta él mismo, así que
-tampoco se la salta quien llame `bunx star release` directo.
+tampoco se la salta quien llame `star release` directo.
 
 **La tarea `release` tiene que ser `cache: false`.** Probado con Vite+ 1.5.0 en
 Windows: una tarea cacheada corre sin TTY (`stdin.isTTY` y `stdout.isTTY` son
@@ -125,12 +125,17 @@ La convención de commits y ramas vive en `src/conventions.ts`, y la corren dos
 comandos: `star hook <nombre>` desde el hook de git y `star lint` desde la CI.
 Lo que pasa en local no falla en el PR, porque es el mismo código.
 
-En la app queda una línea por hook, que `star init hooks` escribe en
-`.githooks` y que se commitea:
+En la app queda un hook corto, que `star init hooks` escribe en `.githooks` y
+que se commitea. Llama a star por su ruta y no con `bunx star` (decisión 21):
 
 ```sh
 #!/usr/bin/env sh
-exec bunx star hook commit-msg "$@"
+cli=node_modules/@baironvillar/star/src/cli.ts
+if [ ! -f "$cli" ]; then
+  echo "star no está instalado en este clon: corre bun install." >&2
+  exit 1
+fi
+exec bun "$cli" hook commit-msg "$@"
 ```
 
 - **No se copia el script.** flotas y Starless tenían cada uno su `commit-msg`
@@ -274,9 +279,10 @@ bun add -d github:baironvillar/star#v0.1.0
 - **Bun ejecuta el TypeScript directo**, así que una dependencia git funciona sin
   paso de build. `vp pack` entra cuando se publique en npm y el CLI tenga que
   correr también con Node.
-- **Los scripts y las tareas llaman a `bunx star`, no a `star`.** En Windows, el
-  shim que Bun crea para un bin con shebang `bun` busca `bun.exe` en el PATH, y
-  falla donde Bun se instaló con npm (que deja un `bun.cmd`). `bunx` funciona en
-  los dos casos. Pasó al adoptarlo en flotas.
+- **Los scripts y las tareas llaman a `bun node_modules/@baironvillar/star/src/cli.ts`**, ni a
+  `star` ni a `bunx star`. En Windows, el shim que Bun crea para un bin con
+  shebang `bun` busca `bun.exe` en el PATH, y falla donde Bun se instaló con
+  npm (que deja un `bun.cmd`): pasó al adoptarlo en flotas. `bunx star`, sin el
+  paquete instalado, baja de npm otro paquete que se llama `star` (decisión 21).
 - La configuración, si hace falta, va en la clave `"star"` del `package.json`
   de la app. No en `vite.config.ts`: Vite+ valida sus propias claves.

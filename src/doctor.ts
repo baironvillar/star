@@ -6,6 +6,7 @@ import { StarError } from "./errors.ts";
 import type { Gh } from "./gh.ts";
 import type { Git } from "./git.ts";
 import { HOOK_NAMES, HOOKS_DIR, inspectHooks } from "./hooks.ts";
+import { STAR } from "./command.ts";
 import { mergeChanges } from "./merge-settings.ts";
 import { MAIN } from "./release.ts";
 import { inspectUpdater, planUpdater, PRIVATE_SECRET } from "./updater-init.ts";
@@ -66,7 +67,7 @@ function changelog(root: string, git: Git): Finding[] {
       error(
         "changelog",
         "no hay un CHANGELOG.md: las notas de cada versión viven ahí",
-        "bunx star init changelog",
+        `${STAR} init changelog`,
       ),
     ];
   }
@@ -123,17 +124,13 @@ function hooks(root: string, git: Git): Finding[] {
       warn(
         "hooks",
         `${missing.join(" y ")} ${missing.length > 1 ? "faltan o no son" : "falta o no es"} el de star`,
-        "bunx star init hooks",
+        `${STAR} init hooks`,
       ),
     );
   }
   if (git.getConfig("core.hooksPath") !== HOOKS_DIR) {
     findings.push(
-      warn(
-        "hooks",
-        `git no usa ${HOOKS_DIR} en este clon (core.hooksPath)`,
-        "bunx star init hooks",
-      ),
+      warn("hooks", `git no usa ${HOOKS_DIR} en este clon (core.hooksPath)`, `${STAR} init hooks`),
     );
   }
   // Pasó en flotas: los hooks llegaron al índice como 644 desde Windows, y en
@@ -146,7 +143,7 @@ function hooks(root: string, git: Git): Finding[] {
       error(
         "hooks",
         `${notExecutable.join(", ")} ${notExecutable.length > 1 ? "no son ejecutables" : "no es ejecutable"} en git: en Linux y macOS no corre${notExecutable.length > 1 ? "n" : ""}`,
-        "bunx star init hooks",
+        `${STAR} init hooks`,
       ),
     );
   }
@@ -161,7 +158,7 @@ function hooks(root: string, git: Git): Finding[] {
 export function releaseTask(viteConfig: string): Finding {
   const match = /\brelease\s*:\s*(\{[^{}]*\}|"[^"]*"|'[^']*'|`[^`]*`)/.exec(viteConfig);
   if (!match) {
-    return ok("vite+", "no hay tarea release: se corre `bunx star release` directo");
+    return ok("vite+", `no hay tarea release: se corre \`${STAR} release\` directo`);
   }
   const value = match[1] ?? "";
   // Una tarea con caché corre sin TTY, y entonces release no tiene a quién
@@ -170,11 +167,15 @@ export function releaseTask(viteConfig: string): Finding {
     return error(
       "vite+",
       "la tarea release tiene caché: corre sin terminal y no puede preguntar",
-      'release: { command: "bunx star release", cache: false }',
+      `release: { command: "${STAR} release", cache: false }`,
     );
   }
-  if (!/bunx star release/.test(value)) {
-    return warn("vite+", "la tarea release no llama a `bunx star release`");
+  if (!value.includes(`${STAR} release`)) {
+    return warn(
+      "vite+",
+      "la tarea release no llama a star por su ruta: con `bunx star`, sin bun install corre otro paquete de npm",
+      `release: { command: "${STAR} release", cache: false }`,
+    );
   }
   return ok("vite+", "la tarea release corre sin caché");
 }
@@ -187,22 +188,24 @@ function vitePlus(root: string): Finding[] {
 }
 
 /**
- * Un script que llama a `star` a secas. En Windows, el shim de Bun para un bin
- * con shebang `bun` busca `bun.exe`, y no está donde Bun se instaló con npm.
+ * Un script que llama a star sin su ruta (decisión 21). `star` a secas no se
+ * encuentra en Windows: el shim de Bun para un bin con shebang `bun` busca
+ * `bun.exe`, y no está donde Bun se instaló con npm. `bunx star`, sin el paquete
+ * instalado, baja de npm otro paquete que se llama `star` y lo ejecuta.
  */
 function scripts(root: string): Finding[] {
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8").replace(/^﻿/, "")) as {
     scripts?: Record<string, string>;
   };
   const bare = Object.entries(pkg.scripts ?? {})
-    .filter(([, command]) => /(?:^|&&|\|\||;)\s*star\b/.test(command))
+    .filter(([, command]) => /(?:^|&&|\|\||;)\s*(?:bunx\s+)?star\b/.test(command))
     .map(([name]) => name);
   return bare.length > 0
     ? [
         warn(
           "scripts",
-          `${bare.join(", ")} llama a \`star\` sin bunx: en Windows puede no encontrarlo`,
-          "cambia `star …` por `bunx star …`",
+          `${bare.join(", ")} no llama a star por su ruta: con \`bunx star\`, sin bun install corre otro paquete de npm`,
+          `usa \`${STAR} …\``,
         ),
       ]
     : [];
@@ -254,7 +257,7 @@ function ci(root: string): Finding[] {
       warn(
         "ci",
         "la CI no revisa el título del PR, que es el asunto del squash",
-        "bunx star init github",
+        `${STAR} init github`,
       ),
     );
   }
@@ -306,17 +309,13 @@ function remote(git: Git, gh: Gh, root: string): Finding[] {
         error(
           "github",
           `origin no tiene la rama ${base}, de donde sale cada versión`,
-          "bunx star init github",
+          `${STAR} init github`,
         ),
       );
     }
     if (git.remoteBranchExists(MAIN) === false) {
       findings.push(
-        error(
-          "github",
-          `origin no tiene ${MAIN}, donde llega cada versión`,
-          "bunx star init github",
-        ),
+        error("github", `origin no tiene ${MAIN}, donde llega cada versión`, `${STAR} init github`),
       );
     }
   }
@@ -339,7 +338,7 @@ function remote(git: Git, gh: Gh, root: string): Finding[] {
       warn(
         "github",
         "no hay plantilla de PR: la descripción es el cuerpo del commit en la base",
-        "bunx star init github",
+        `${STAR} init github`,
       ),
     );
   }
@@ -370,7 +369,7 @@ function mergeSettings(gh: Gh, base: string): Finding[] {
     warn(
       "github",
       `el repo no está como lo pide star: ${changes.map((c) => c.description).join("; ")}`,
-      "bunx star init github",
+      `${STAR} init github`,
     ),
   ];
 }
@@ -420,13 +419,11 @@ function updater(root: string, gh: Gh): Finding[] {
       findings.push(error("updater", plan.reason));
       break;
     case "generate":
-      findings.push(
-        error("updater", "la app no tiene llave del updater", "bunx star init updater"),
-      );
+      findings.push(error("updater", "la app no tiene llave del updater", `${STAR} init updater`));
       break;
     case "upload":
       findings.push(
-        error("updater", `el repo no tiene el secreto ${PRIVATE_SECRET}`, "bunx star init updater"),
+        error("updater", `el repo no tiene el secreto ${PRIVATE_SECRET}`, `${STAR} init updater`),
       );
       break;
     case "ready":

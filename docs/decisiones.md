@@ -88,7 +88,7 @@ commit. Antes había que acordarse de borrarlo en cada release.
 
 La propuesta original era llevar los `commit-msg` y `pre-push` de flotas, en
 `sh`, como archivos del kit. Se escribieron en TypeScript (`conventions.ts`) y
-la app guarda una línea por hook que llama a `bunx star hook`.
+la app guarda un hook corto que llama a star por su ruta (decisión 21).
 
 - Se prueban con Vitest como el resto, sin depender de `grep` ni de la
   collation del sistema.
@@ -117,7 +117,7 @@ dos casos:
 ## 15. Los workflows usan el star instalado en la app
 
 La propuesta era que `verify.yml` descargara star en la misma versión que el
-workflow (`job_workflow_sha`). Usa el que la app tiene instalado (`bunx star`):
+workflow (`job_workflow_sha`). Usa el que la app tiene instalado (`bunx star`, después de `bun install`):
 
 - La regla que pasó en local (`star release`, los hooks) es la misma que corre
   en la CI. Con dos copias, una app podía pasar en local y fallar en el tag.
@@ -228,6 +228,30 @@ mostrando el plan y preguntando una vez:
    plantilla o un workflow que ya existe es de la app (decisión 14). En un repo
    que ya tenía historia quedan en el árbol, para commitearlos en un PR.
 4. **Ajustes de merge** de la decisión 19, y los vuelve a leer después.
+
+## 21. La app llama a star por su ruta, no con `bunx star`
+
+Al probar `bunx star doctor` dentro del repo de star, bunx no encontró star en
+`node_modules/.bin` (ahí no es dependencia), bajó de npm el paquete que se llama
+`star`, una herramienta de acciones de otra persona, y lo ejecutó. En una app
+pasa lo mismo en un clon sin `bun install`: el hook `commit-msg`, que llamaba a
+`bunx star hook`, correría código ajeno en cada commit. `bunx --no-install` no
+protege: una vez bajado, el paquete queda en la caché global de bunx.
+
+- **Hooks, scripts y la tarea `release`** llaman a
+  `bun node_modules/@baironvillar/star/src/cli.ts`. Si star no está instalado,
+  fallan con un mensaje en vez de correr otra cosa. El hook lo dice: "corre bun
+  install".
+- **`star` a secas sigue sin servir** en Windows (el shim de Bun busca
+  `bun.exe`; ver la arquitectura). `bun <ruta>` funciona en los dos casos,
+  porque `bun` ya está en el PATH de quien usa star.
+- **Los workflows siguen con `bunx star`.** Corren después de
+  `bun install --frozen-lockfile` en un runner limpio: star siempre está en
+  `node_modules`, y si la instalación falla el job se corta antes.
+- **`doctor` avisa** si un script o la tarea `release` llama a `bunx star`, y
+  `star init hooks` reescribe los hooks viejos, que ya no son los de star.
+- La ruta sale del `name` del `package.json` de star (`src/command.ts`): si se
+  publica con otro nombre, cambia en un solo lugar.
 
 ## 22. `autoMerge`: la release se termina sola, en la terminal
 
