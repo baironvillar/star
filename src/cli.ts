@@ -92,7 +92,9 @@ Uso:
   star notes [versión]         las notas de esa versión en CHANGELOG.md
   star release [nivel]         prepara una versión desde develop: puerta, rama
                                release/<versión>, bump, commit, push y PR. Con
-                               "autoMerge": true espera el CI y termina sola
+                               "autoMerge": true espera el CI, la mergea y
+                               pregunta antes de lanzarla (main y tag); con
+                               "confirmRelease": false, ni eso
   star release <nivel> --beta  empieza una beta (0.6.0 → 0.7.0-beta.1). Sale como
                                prerelease: la app instalada no la ve
   star release beta            la beta siguiente (0.7.0-beta.1 → 0.7.0-beta.2).
@@ -641,11 +643,15 @@ function verify(root: string, tag: string | undefined, notesFile: string | undef
   // En GitHub Actions la versión sale como output del paso, para los jobs que
   // vienen después (el título de la release, el tag de una imagen).
   // `prerelease` le sirve a la app para decidir lo suyo (un ícono, un canal);
-  // los workflows de star lo deducen solos de la versión.
+  // los workflows de star lo deducen solos de la versión. `publish` dice si la
+  // release sale publicada o en borrador (decisión 23): con autoMerge, el tag
+  // existe porque alguien dijo que sí a lanzarla, o porque la app pidió que
+  // fuera 100% automático.
   if (process.env.GITHUB_OUTPUT) {
+    const publish = readConfig(root).autoMerge;
     appendFileSync(
       process.env.GITHUB_OUTPUT,
-      `version=${version}\nprerelease=${isPrerelease(version)}\ncommit=${commit}\n`,
+      `version=${version}\nprerelease=${isPrerelease(version)}\ncommit=${commit}\npublish=${publish}\n`,
     );
   }
   console.log(`\n✓ ${tag} se puede construir.`);

@@ -274,3 +274,27 @@ espera el CI y hace el `finish`. Sin la clave, nada cambia.
 - **No es el auto-merge de GitHub.** Ése mergea con el squash del repo, pero
   no actualiza `main` ni crea el tag, y exige protección de rama con checks
   requeridos. Para los PR de features sigue pendiente.
+
+## 23. Lanzar se pregunta; publicar va con `autoMerge`
+
+Lo automático llega hasta la base. Lanzar una versión (llevarla a `main`,
+empujar el tag y publicar la release) es lo que la hace llegar a la gente, y
+eso se pregunta, salvo que la app pida lo contrario.
+
+- **Con `autoMerge`, la pregunta va después del squash**: "¿Lanzar la x.y.z?".
+  Con un no, la versión queda en la base sin `main` ni tag, y
+  `star release finish x.y.z` la lanza cuando se quiera. Si no hay nadie para
+  contestar, se para igual y dice cómo seguir.
+- **`"confirmRelease": false` la quita**, y con `autoMerge` todo es
+  automático. Por defecto es `true`: lo que no se configura pregunta.
+- **Sin `autoMerge` no cambia nada.** `star release finish` ya preguntaba antes
+  de mergear, y esa pregunta cubre el lanzamiento.
+- **Con `autoMerge`, la release se publica sola.** El tag existe porque alguien
+  dijo que sí, o porque la app pidió que fuera 100% automático, así que el
+  borrador ya no protege nada. Igual nace en borrador y se publica al final,
+  después de revisarla: en escritorio, sólo si `star release check` pasa,
+  porque publicarla es cuando las apps instaladas se actualizan. Sin
+  `autoMerge` sigue en borrador y se publica a mano.
+- **La decide el CLI, no el YAML.** `star verify` escribe `publish` según la
+  configuración de la app, y los workflows sólo lo usan. Cierra la pregunta
+  abierta 2 de [`alcance.md`](alcance.md) sin un `star publish` aparte.

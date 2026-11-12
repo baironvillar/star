@@ -6,6 +6,19 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Agregado
+
+- Con `autoMerge`, el PR de la versión se mergea solo a la base, pero antes de
+  llevarla a `main` y empujar el tag star pregunta "¿Lanzar la x.y.z?". Con un
+  no, queda en la base y se lanza después con `star release finish`.
+- `"star": { "confirmRelease": false }` quita esa pregunta: con `autoMerge`, la
+  versión sale 100% automática.
+- Con `autoMerge`, la release se publica sola cuando el workflow termina de
+  construirla y revisarla (en escritorio, después de `star release check`). Sin
+  `autoMerge` sigue en borrador. `verify.yml` devuelve `publish`, y
+  `web-release.yml` y `tauri-release.yml` lo reciben: pásalo como
+  `publish: ${{ needs.verify.outputs.publish }}`.
+
 ## [0.7.0] - 2026-11-12
 
 ### Agregado

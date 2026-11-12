@@ -18,6 +18,7 @@ name: web-release
 #       with:
 #         version: ${{ needs.verify.outputs.version }}
 #         assets: web-bundle                  # nombre o patrón de artefactos
+#         publish: ${{ needs.verify.outputs.publish }}
 #
 # Construir, la imagen Docker y el despliegue son de la app: acá sólo se arma
 # la release y se revisa que haya quedado bien.
@@ -33,6 +34,10 @@ on:
         description: Nombre o patrón de los artefactos del workflow que van como assets. Vacío, ninguno.
         type: string
         default: ""
+      publish:
+        description: '"true" publica la release después de revisarla. Sale de verify.yml (autoMerge); si no, queda en borrador.'
+        type: string
+        default: "false"
 
 jobs:
   release:
@@ -59,8 +64,9 @@ jobs:
           path: assets
           merge-multiple: true
 
-      # Queda en borrador a propósito: publicarla es la decisión de que esta
-      # versión sale, y es un clic, no un efecto colateral de empujar un tag.
+      # Nace en borrador: así se revisa antes de que nadie la vea. Se publica
+      # al final sólo si la app usa autoMerge (decisión 23), porque ahí el tag
+      # existe porque alguien dijo que sí a lanzarla.
       # `--verify-tag` falla si el tag no existe en GitHub, en vez de crearlo.
       - name: Crear la release
         run: |
@@ -91,3 +97,13 @@ jobs:
             exit 1
           }
           echo "Release $TAG en borrador con $subidos asset(s)."
+
+      - name: Publicar la release
+        if: inputs.publish == 'true'
+        run: |
+          gh release edit "$TAG" --draft=false
+          [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "false" ] || {
+            echo "::error::La release $TAG sigue en borrador."
+            exit 1
+          }
+          echo "Release $TAG publicada."

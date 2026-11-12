@@ -40,6 +40,10 @@ import {
  * **Con `"autoMerge": true`** (decisión 22), `star release` no se detiene en el
  * PR: espera el CI y hace el `finish` solo, en la misma terminal. Si se corta,
  * `star release finish` retoma.
+ *
+ * **Lanzar se pregunta** (decisión 23): el squash a la base es automático, pero
+ * antes de `main` y el tag se pregunta, salvo con `"confirmRelease": false`.
+ * Con `autoMerge`, la release se publica sola cuando el workflow la construye.
  */
 
 /** La rama de lo publicado. Fija, como en `star lint`. */
@@ -307,8 +311,11 @@ export async function prepareRelease(
     `Se crea ${branch}, se commitea "${next}" y se empuja${ghReady ? `, y se abre el PR a ${config.base}` : ""}.\n`,
   );
   if (auto) {
+    const launch = `${isPrerelease(next) ? "" : `${MAIN}, `}el tag y publicar la release`;
     io.log(
-      `Con autoMerge, cuando el CI pase se termina sola: squash como "${next}"${isPrerelease(next) ? "" : `, ${MAIN}`} y tag.\n`,
+      config.confirmRelease
+        ? `Con autoMerge, cuando el CI pase se mergea sola a ${config.base} como "${next}". Antes de ${launch} se pregunta.\n`
+        : `Con autoMerge y sin confirmRelease, cuando el CI pase todo es automático: squash como "${next}", ${launch}.\n`,
     );
   }
   if (!(await io.confirm(`¿Preparar la ${next}?`))) {
@@ -417,11 +424,16 @@ export async function finishRelease(
 
   const merge = pr?.state === "OPEN" ? pr : null;
   const toMain = stable ? `, se lleva a ${MAIN}` : "";
-  io.log(
-    merge
-      ? `\nSe mergea el PR #${merge.number} con squash como "${version}", se actualiza ${config.base}${toMain} y se empuja ${tag}.\n`
-      : `\nSe actualiza ${config.base}${toMain} y se empuja ${tag} sobre su último commit.\n`,
-  );
+  const published = config.autoMerge
+    ? ", y la release se publica cuando el workflow la construya"
+    : "";
+  if (!options.confirmed) {
+    io.log(
+      merge
+        ? `\nSe mergea el PR #${merge.number} con squash como "${version}", se actualiza ${config.base}${toMain} y se empuja ${tag}${published}.\n`
+        : `\nSe actualiza ${config.base}${toMain} y se empuja ${tag} sobre su último commit${published}.\n`,
+    );
+  }
   if (!options.confirmed && !(await io.confirm(`¿Terminar la ${version}?`))) {
     io.log("No se cambió nada.");
     return;
@@ -448,6 +460,26 @@ export async function finishRelease(
     after.push(`CHANGELOG.md de ${config.base} no tiene notas para la ${version}.`);
   }
   if (after.length > 0) fail(`No se creó el tag ${tag}:`, after);
+
+  // Lo que llegó solo a la base no se lanza solo, salvo que la app lo pida.
+  // Sin autoMerge, la pregunta de terminar ya cubría esto.
+  if (options.confirmed && config.confirmRelease) {
+    const resume = `La ${version} quedó en ${config.base} sin lanzar. Cuando quieras: \`${STAR} release finish ${version}\`.`;
+    io.log(
+      `\n✓ La ${version} está en ${config.base}. Al lanzarla${toMain}, se empuja ${tag}${published}.\n`,
+    );
+    let launch: boolean;
+    try {
+      launch = await io.confirm(`¿Lanzar la ${version}?`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new StarError(`${reason}\n\n${resume}`);
+    }
+    if (!launch) {
+      io.log(resume);
+      return;
+    }
+  }
 
   if (stable) publishToMain(git, config.base, version, io);
 
