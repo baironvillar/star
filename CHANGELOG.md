@@ -27,7 +27,16 @@ siguen [SemVer](https://semver.org/lang/es/).
   requests, y `star lint branch --into main` los rechaza.
 - `star doctor` revisa que exista `main`, que el repo sólo permita squash, que
   la base sea la rama por defecto y que haya plantilla de PR; todo lo que falte
-  apunta a `bunx star init github`.
+  apunta a `star init github`.
+
+### Seguridad
+
+- Los hooks llaman a star por su ruta (`bun node_modules/@baironvillar/star/src/cli.ts`) y no con
+  `bunx star`. Sin el paquete instalado, bunx bajaba de npm otro paquete que se
+  llama `star` y lo ejecutaba en cada commit. Sin star, el hook ahora falla y
+  pide `bun install`. Reinstala los hooks con `star init hooks`.
+- `star doctor` avisa si un script o la tarea `release` llaman a `bunx star`,
+  y propone la ruta.
 
 ## [0.6.0] - 2026-11-11
 

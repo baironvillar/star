@@ -43,6 +43,7 @@ bun run star -- version # el CLI desde el código
 
 ```
 src/cli.ts              comandos y salida; nada de lógica que no se pueda probar aparte
+src/command.ts          cómo llama una app a star: por su ruta, nunca con bunx star
 src/version.ts          leer todos los manifiestos, planificar y aplicar la escritura
 src/semver.ts           parsear y subir versiones, betas incluidas
 src/readiness.ts        los chequeos antes de un bump (git es una interfaz, se prueba con un doble)

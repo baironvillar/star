@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkMessage, subjectOf, type Verdict } from "./conventions.ts";
+import { STAR_CLI } from "./command.ts";
 import type { Git } from "./git.ts";
 
 export const HOOK_NAMES = ["commit-msg", "pre-push"] as const;
@@ -10,13 +11,18 @@ export type HookName = (typeof HOOK_NAMES)[number];
 export const HOOKS_DIR = ".githooks";
 
 /**
- * Lo que queda en la app: una línea que llama a star.
+ * Lo que queda en la app: unas líneas que llaman a star.
  *
  * La regla vive en el paquete y no en una copia: así una corrección llega a
  * todas las apps con subir la versión de star, y la CI (`star lint`) corre el
  * mismo código que el hook. `sh` porque git corre los hooks con el intérprete
  * del shebang en cualquier plataforma, también en Windows (con el de Git).
  * `exec` le deja el stdin a star: `pre-push` recibe las refs por ahí.
+ *
+ * star se llama por su ruta y no con `bunx star` (decisión 21): en un clon sin
+ * `bun install`, bunx bajaría de npm otro paquete que se llama `star` y lo
+ * correría en cada commit. git corre los hooks desde la raíz del repo, así que
+ * la ruta relativa sirve.
  */
 export function hookScript(name: HookName): string {
   return [
@@ -24,7 +30,15 @@ export function hookScript(name: HookName): string {
     "#",
     "# Instalado por `star init hooks`. La convención vive en star, no acá: este",
     "# archivo no se edita, y la CI corre la misma regla con `star lint`.",
-    `exec bunx star hook ${name} "$@"`,
+    "#",
+    "# star se llama por su ruta: sin el paquete instalado, `bunx star` bajaría",
+    '# de npm otro paquete que se llama "star" y lo ejecutaría.',
+    `cli=${STAR_CLI}`,
+    'if [ ! -f "$cli" ]; then',
+    '  echo "star no está instalado en este clon: corre bun install." >&2',
+    "  exit 1",
+    "fi",
+    `exec bun "$cli" hook ${name} "$@"`,
     "",
   ].join("\n");
 }

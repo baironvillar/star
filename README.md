@@ -82,9 +82,9 @@ no se construye.
 
 ```bash
 bun add -d github:baironvillar/star#v0.1.0
-bunx star init hooks     # commit-msg y pre-push (ya existe)
-bunx star doctor         # qué falta o está mal (ya existe)
-bunx star init           # el resto: updater, secretos, changelog (previsto)
+bun node_modules/@baironvillar/star/src/cli.ts init hooks    # commit-msg y pre-push
+bun node_modules/@baironvillar/star/src/cli.ts doctor         # qué falta o está mal
+bun node_modules/@baironvillar/star/src/cli.ts init github    # el repo en GitHub, listo para el primer PR
 ```
 
 ```ts
@@ -93,7 +93,7 @@ export default defineConfig({
   run: {
     tasks: {
       verify: ["vp check", "vp test run"],
-      release: { command: "bunx star release", cache: false },
+      release: { command: "bun node_modules/@baironvillar/star/src/cli.ts release", cache: false },
     },
   },
 });

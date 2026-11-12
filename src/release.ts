@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { changelogSection, copyUnreleased, promoteUnreleased, readChangelog } from "./changelog.ts";
+import { STAR } from "./command.ts";
 import { readConfig } from "./config.ts";
 import { StarError } from "./errors.ts";
 import type { Gh, PullRequest } from "./gh.ts";
@@ -342,7 +343,7 @@ export async function prepareRelease(
   } else {
     io.log(`\n✓ ${branch} empujada. Abre el PR a ${config.base} con el título "${next}".`);
   }
-  io.log(`\nCuando el CI del PR pase:\n\n  bunx star release finish\n`);
+  io.log(`\nCuando el CI del PR pase:\n\n  ${STAR} release finish\n`);
 }
 
 /** Fase 2: mergea el PR con el asunto exacto, y etiqueta lo que llegó a la base. */
@@ -376,7 +377,7 @@ export async function finishRelease(
   const stable = !isPrerelease(version);
   if (stable && git.remoteBranchExists(MAIN) === false) {
     problems.push(
-      `origin no tiene ${MAIN}, donde llega cada versión: corre \`bunx star init github\`.`,
+      `origin no tiene ${MAIN}, donde llega cada versión: corre \`${STAR} init github\`.`,
     );
   }
   const dirty = trackedChanges(git.dirty(), []);

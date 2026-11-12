@@ -47,14 +47,14 @@ function app(files: Record<string, string> = {}): string {
     "package.json": JSON.stringify({
       name: "app",
       version: "0.2.0",
-      scripts: { release: "bunx star release" },
+      scripts: { release: "bun node_modules/@baironvillar/star/src/cli.ts release" },
       devDependencies: { "vite-plus": "1.5.0" },
     }),
     "CHANGELOG.md": "# Changelog\n\n## [Sin publicar]\n\n## [0.2.0] - 2026-11-09\n\n- Algo.\n",
     ".githooks/commit-msg": hookScript("commit-msg"),
     ".githooks/pre-push": hookScript("pre-push"),
     "vite.config.ts":
-      'export default { run: { tasks: { release: { command: "bunx star release", cache: false } } } };\n',
+      'export default { run: { tasks: { release: { command: "bun node_modules/@baironvillar/star/src/cli.ts release", cache: false } } } };\n',
     ".github/workflows/ci.yml":
       'steps:\n  - run: bunx star lint commits "$A..$B"\n  - run: bunx star lint title "$T"\n',
     ".github/PULL_REQUEST_TEMPLATE.md": "## What\n",
@@ -96,7 +96,7 @@ describe("diagnose", () => {
     expect(found).toMatch(/error hooks: .*no son ejecutables/);
     expect(found).toMatch(/warn ci: un workflow corre los scripts de \.githooks/);
     expect(found).toMatch(/warn ci: la CI no revisa la convención/);
-    expect(found).toMatch(/warn scripts: version llama a `star` sin bunx/);
+    expect(found).toMatch(/warn scripts: version no llama a star por su ruta/);
   });
 
   it("manifiestos que discrepan, una versión publicada sin notas y una llave commiteada", () => {
@@ -134,12 +134,12 @@ describe("diagnose", () => {
     const git = fakeGit({ remoteBranchExists: () => true, getConfig: () => null });
     const findings = diagnose({ root, git, gh: gh() }).filter((f) => f.level !== "ok");
     expect(findings.map((f) => `${f.level} ${f.area} → ${f.fix ?? ""}`)).toEqual([
-      "error changelog → bunx star init changelog",
-      "warn hooks → bunx star init hooks",
-      "warn hooks → bunx star init hooks",
+      "error changelog → bun node_modules/@baironvillar/star/src/cli.ts init changelog",
+      "warn hooks → bun node_modules/@baironvillar/star/src/cli.ts init hooks",
+      "warn hooks → bun node_modules/@baironvillar/star/src/cli.ts init hooks",
       "warn ci → un workflow que corra la puerta y bunx star lint commits, branch y title",
       "warn github → ",
-      "warn github → bunx star init github",
+      "warn github → bun node_modules/@baironvillar/star/src/cli.ts init github",
     ]);
   });
 
@@ -187,7 +187,7 @@ describe("diagnose", () => {
     const git = healthyGit({ remoteBranchExists: (name) => name !== "main" });
     const found = diagnose({ root: app(), git, gh: gh() }).filter((f) => f.level === "error");
     expect(found.map((f) => `${f.message} → ${f.fix}`)).toEqual([
-      "origin no tiene main, donde llega cada versión → bunx star init github",
+      "origin no tiene main, donde llega cada versión → bun node_modules/@baironvillar/star/src/cli.ts init github",
     ]);
   });
 
@@ -206,7 +206,7 @@ describe("diagnose", () => {
     expect(merge[0]?.message).toMatch(/no está como lo pide star/);
     expect(merge[0]?.message).toMatch(/merge commit: habilitado → deshabilitado/);
     expect(merge[0]?.message).toMatch(/asunto del squash: .* → el título del PR/);
-    expect(merge[0]?.fix).toBe("bunx star init github");
+    expect(merge[0]?.fix).toBe("bun node_modules/@baironvillar/star/src/cli.ts init github");
   });
 
   it("si no puede leer los ajustes de merge, lo dice sin frenar", () => {
@@ -232,14 +232,46 @@ describe("diagnose", () => {
   });
 });
 
+describe("scripts", () => {
+  it("bunx star o star a secas: avisa y propone la ruta", () => {
+    const root = app({
+      "package.json": JSON.stringify({
+        version: "0.2.0",
+        scripts: {
+          "hooks:install": "bunx star init hooks",
+          ok: "bun node_modules/@baironvillar/star/src/cli.ts version",
+        },
+        devDependencies: { "vite-plus": "1.5.0" },
+      }),
+    });
+    const found = diagnose({ root, git: healthyGit(), gh: gh() }).filter(
+      (f) => f.area === "scripts",
+    );
+    expect(found.map((f) => `${f.level} ${f.message} → ${f.fix}`)).toEqual([
+      "warn hooks:install no llama a star por su ruta: con `bunx star`, sin bun install corre otro paquete de npm → usa `bun node_modules/@baironvillar/star/src/cli.ts …`",
+    ]);
+  });
+});
+
 describe("releaseTask", () => {
   it("exige cache: false, porque con caché la tarea corre sin terminal", () => {
-    expect(releaseTask('release: { command: "bunx star release", cache: false },').level).toBe(
-      "ok",
-    );
-    expect(releaseTask('release: "bunx star release",').level).toBe("error");
-    expect(releaseTask('release: { command: "bunx star release" },').level).toBe("error");
+    expect(
+      releaseTask(
+        'release: { command: "bun node_modules/@baironvillar/star/src/cli.ts release", cache: false },',
+      ).level,
+    ).toBe("ok");
+    expect(
+      releaseTask('release: "bun node_modules/@baironvillar/star/src/cli.ts release",').level,
+    ).toBe("error");
+    expect(
+      releaseTask('release: { command: "bun node_modules/@baironvillar/star/src/cli.ts release" },')
+        .level,
+    ).toBe("error");
     expect(releaseTask('release: { command: "./publish.sh", cache: false },').level).toBe("warn");
     expect(releaseTask("tasks: { verify: ['vp check'] }").level).toBe("ok");
+    // Con bunx, sin bun install corre el paquete "star" de npm, que es otro.
+    expect(releaseTask('release: { command: "bunx star release", cache: false },').level).toBe(
+      "warn",
+    );
   });
 });
