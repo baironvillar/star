@@ -95,6 +95,13 @@ Ver la decisión 16.
    notas.
 4. Crea el tag anotado `vx.y.z` y lo empuja. Desde ahí sigue la CI.
 
+**Con `"star": { "autoMerge": true }`** las dos fases corren seguidas: después
+de abrir el PR, `star release` le pregunta a GitHub por el CI cada 15 segundos
+y, cuando pasa, hace el `finish` sin volver a preguntar (la pregunta de
+preparar ya lo decía). Si el CI falla, se para sin mergear; si sigue corriendo
+después de 30 minutos, o se corta con Ctrl+C, `star release finish` retoma, y
+con `autoMerge` también espera en vez de fallar. Ver la decisión 22.
+
 **La puerta** sale de `"star": { "gate": ... }` en el `package.json` de la app.
 Sin configurar, si la app usa Vite+ es `vp check` y `vp test run`. En una app
 con Vite+ conviene apuntarla a una tarea cacheada (`"gate": "vp run verify"`):

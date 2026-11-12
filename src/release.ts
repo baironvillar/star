@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { changelogSection, copyUnreleased, promoteUnreleased, readChangelog } from "./changelog.ts";
 import { readConfig } from "./config.ts";
 import { StarError } from "./errors.ts";
-import type { Gh } from "./gh.ts";
+import type { Gh, PullRequest } from "./gh.ts";
 import type { Git } from "./git.ts";
 import { hasOwnVersion } from "./manifests/types.ts";
 import type { Readiness } from "./readiness.ts";
@@ -35,6 +35,10 @@ import {
  * **`main` la actualiza `finish`** (decisión 19): un merge commit de la base
  * con la versión como asunto. Así ningún PR necesita merge commit, y el repo
  * puede permitir sólo squash. Las betas no llegan a `main`.
+ *
+ * **Con `"autoMerge": true`** (decisión 22), `star release` no se detiene en el
+ * PR: espera el CI y hace el `finish` solo, en la misma terminal. Si se corta,
+ * `star release finish` retoma.
  */
 
 /** La rama de lo publicado. Fija, como en `star lint`. */
@@ -55,7 +59,55 @@ export type ReleaseDeps = {
   /** Corre los comandos de la puerta en orden. Devuelve si pasaron todos. */
   runGate(commands: string[]): boolean;
   today(): string;
+  /** Espera; en los tests, nada. */
+  sleep(ms: number): Promise<void>;
+  /** Milisegundos desde el epoch: para el límite de la espera. */
+  now(): number;
 };
+
+/** Cada cuánto se le pregunta a GitHub por el CI. */
+export const POLL_MS = 15_000;
+/** Cuánto se espera a que un PR recién abierto tenga checks. */
+export const CHECKS_GRACE_MS = 60_000;
+/** Cuánto se espera al CI antes de rendirse. */
+export const WAIT_LIMIT_MS = 30 * 60_000;
+
+/**
+ * Espera a que el CI del PR termine, y devuelve el PR como quedó.
+ *
+ * Un PR recién abierto no tiene checks por unos segundos, hasta que GitHub
+ * agenda los workflows: "sin checks" se toma como "todavía no" durante
+ * `CHECKS_GRACE_MS`, y después como lo que es. Al pasar `WAIT_LIMIT_MS` se
+ * rinde sin tocar nada: el PR sigue ahí para `star release finish`.
+ */
+export async function waitForChecks(
+  deps: Pick<ReleaseDeps, "gh" | "io" | "sleep" | "now">,
+  head: string,
+  version: string,
+): Promise<PullRequest | null> {
+  const { gh, io } = deps;
+  const start = deps.now();
+  let announced = false;
+  for (;;) {
+    const pr = gh.findPr(head);
+    if (!pr || pr.state !== "OPEN") return pr;
+    const elapsed = deps.now() - start;
+    const waiting = pr.checks === "pending" || (pr.checks === "none" && elapsed < CHECKS_GRACE_MS);
+    if (!waiting) return pr;
+    if (elapsed >= WAIT_LIMIT_MS) {
+      throw new StarError(
+        `el CI del PR #${pr.number} sigue corriendo después de ${WAIT_LIMIT_MS / 60_000} minutos. No se tocó nada: cuando termine, corre \`star release finish ${version}\`.`,
+      );
+    }
+    if (!announced) {
+      io.log(
+        `Esperando el CI del PR #${pr.number}… (con Ctrl+C lo dejas, y sigues con \`star release finish\`)`,
+      );
+      announced = true;
+    }
+    await deps.sleep(POLL_MS);
+  }
+}
 
 function fail(title: string, problems: string[]): never {
   throw new StarError(`${title}\n\n${problems.map((p) => `  - ${p}`).join("\n")}`);
@@ -249,9 +301,15 @@ export async function prepareRelease(
     io.log(`\nLa ${next} sale como prerelease: la app instalada no la ve, se prueba a mano.`);
   }
   io.log(`\n${check.notes}\n`);
+  const auto = ghReady && config.autoMerge;
   io.log(
     `Se crea ${branch}, se commitea "${next}" y se empuja${ghReady ? `, y se abre el PR a ${config.base}` : ""}.\n`,
   );
+  if (auto) {
+    io.log(
+      `Con autoMerge, cuando el CI pase se termina sola: squash como "${next}"${isPrerelease(next) ? "" : `, ${MAIN}`} y tag.\n`,
+    );
+  }
   if (!(await io.confirm(`¿Preparar la ${next}?`))) {
     io.log("No se cambió nada.");
     return;
@@ -278,7 +336,9 @@ export async function prepareRelease(
       title: next,
       body: check.notes ?? "",
     });
-    io.log(`\n✓ PR abierto: ${url}`);
+    io.log(`\n✓ PR abierto: ${url}\n`);
+    // Ya se confirmó arriba, con lo que iba a pasar después del CI incluido.
+    if (auto) return finishRelease(deps, next, { confirmed: true });
   } else {
     io.log(`\n✓ ${branch} empujada. Abre el PR a ${config.base} con el título "${next}".`);
   }
@@ -286,7 +346,11 @@ export async function prepareRelease(
 }
 
 /** Fase 2: mergea el PR con el asunto exacto, y etiqueta lo que llegó a la base. */
-export async function finishRelease(deps: ReleaseDeps, versionArg?: string): Promise<void> {
+export async function finishRelease(
+  deps: ReleaseDeps,
+  versionArg?: string,
+  options: { confirmed?: boolean } = {},
+): Promise<void> {
   const { root, git, gh, io } = deps;
   const config = readConfig(root);
   if (!git.fetch()) io.warn("no se pudo traer lo nuevo de origin.");
@@ -319,7 +383,15 @@ export async function finishRelease(deps: ReleaseDeps, versionArg?: string): Pro
   if (dirty.length > 0) problems.push("hay cambios sin commitear: commitéalos o guárdalos antes.");
 
   const ghReady = gh.available();
-  const pr = ghReady ? gh.findPr(head) : null;
+  let pr = ghReady ? gh.findPr(head) : null;
+  // Con autoMerge, un CI que todavía corre se espera en vez de ser un problema.
+  if (
+    config.autoMerge &&
+    pr?.state === "OPEN" &&
+    (pr.checks === "pending" || pr.checks === "none")
+  ) {
+    pr = await waitForChecks(deps, head, version);
+  }
   if (!ghReady) {
     warnings.push(`sin gh no puedo ver el PR de ${head}: se asume que ya está mergeado.`);
   } else if (!pr) {
@@ -349,7 +421,7 @@ export async function finishRelease(deps: ReleaseDeps, versionArg?: string): Pro
       ? `\nSe mergea el PR #${merge.number} con squash como "${version}", se actualiza ${config.base}${toMain} y se empuja ${tag}.\n`
       : `\nSe actualiza ${config.base}${toMain} y se empuja ${tag} sobre su último commit.\n`,
   );
-  if (!(await io.confirm(`¿Terminar la ${version}?`))) {
+  if (!options.confirmed && !(await io.confirm(`¿Terminar la ${version}?`))) {
     io.log("No se cambió nada.");
     return;
   }

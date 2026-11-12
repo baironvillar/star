@@ -6,6 +6,14 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Agregado
+
+- `"star": { "autoMerge": true }` en el `package.json` de la app: `star release`
+  abre el PR, espera a que el CI pase y termina la versión sola (squash con la
+  versión como asunto, `main` y tag), sin tener que volver a correr
+  `star release finish`. Si el CI falla no mergea nada. Con `autoMerge`,
+  `star release finish` también espera un CI que todavía corre en vez de fallar.
+
 ### Cambiado
 
 - `star init github` deja el repo en GitHub listo para el primer PR con un solo

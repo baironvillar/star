@@ -228,3 +228,25 @@ mostrando el plan y preguntando una vez:
    plantilla o un workflow que ya existe es de la app (decisión 14). En un repo
    que ya tenía historia quedan en el árbol, para commitearlos en un PR.
 4. **Ajustes de merge** de la decisión 19, y los vuelve a leer después.
+
+## 22. `autoMerge`: la release se termina sola, en la terminal
+
+Con `"star": { "autoMerge": true }`, `star release` no se detiene en el PR:
+espera el CI y hace el `finish`. Sin la clave, nada cambia.
+
+- **En la terminal, no en GitHub Actions.** Un tag empujado desde un workflow
+  con el `GITHUB_TOKEN` no dispara otros workflows, así que el de release no
+  correría. Hacerlo en Actions pediría un token personal guardado como secreto,
+  y el kit evita sumar secretos (regla 1). En la terminal el tag lo empuja la
+  persona, como siempre.
+- **Se pregunta una vez.** La pregunta de preparar dice que la versión se
+  termina sola cuando el CI pase; volver a preguntar después de esperar el CI
+  le pediría a alguien que se quede mirando.
+- **Espera con límite.** Cada 15 segundos, hasta 30 minutos. Un PR recién
+  abierto no tiene checks por unos segundos: "sin checks" cuenta como "todavía
+  no" durante el primer minuto. Al rendirse no toca nada, y
+  `star release finish` retoma; con `autoMerge` también espera.
+- **Un CI que falla no se mergea**, igual que en `finish`.
+- **No es el auto-merge de GitHub.** Ése mergea con el squash del repo, pero
+  no actualiza `main` ni crea el tag, y exige protección de rama con checks
+  requeridos. Para los PR de features sigue pendiente.

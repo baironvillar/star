@@ -7,7 +7,16 @@ import { StarError } from "./errors.ts";
 import type { Gh, PullRequest } from "./gh.ts";
 import { gitIn } from "./git.ts";
 import type { Manifest } from "./manifests/types.ts";
-import { checkPrepare, finishRelease, prepareRelease, type ReleaseDeps } from "./release.ts";
+import {
+  CHECKS_GRACE_MS,
+  checkPrepare,
+  finishRelease,
+  POLL_MS,
+  prepareRelease,
+  type ReleaseDeps,
+  WAIT_LIMIT_MS,
+  waitForChecks,
+} from "./release.ts";
 import { fakeGit } from "./testing/fake-git.ts";
 import type { Entry } from "./version.ts";
 
@@ -88,6 +97,78 @@ describe("checkPrepare", () => {
  * tag. GitHub es lo único que se reemplaza, por un doble.
  */
 // Cada test hace decenas de llamadas a git, y en Windows cada una cuesta.
+/** Un reloj que sólo avanza cuando se espera: los tests no esperan de verdad. */
+function clock(): Pick<ReleaseDeps, "sleep" | "now"> {
+  let t = 0;
+  return {
+    sleep: async (ms) => {
+      t += ms;
+    },
+    now: () => t,
+  };
+}
+
+describe("waitForChecks", () => {
+  const silent = { log: () => {}, warn: () => {}, confirm: async () => true };
+  const open = (checks: PullRequest["checks"]): PullRequest => ({
+    number: 7,
+    url: "https://github.com/x/app/pull/7",
+    state: "OPEN",
+    checks,
+    mergeable: true,
+  });
+  /** Un gh que contesta los estados en orden y repite el último. */
+  function answers(...prs: PullRequest[]): Gh {
+    let i = 0;
+    return { findPr: () => prs[Math.min(i++, prs.length - 1)] } as unknown as Gh;
+  }
+
+  it("espera mientras el CI corre y devuelve cómo terminó", async () => {
+    const time = clock();
+    const pr = await waitForChecks(
+      { gh: answers(open("none"), open("pending"), open("passing")), io: silent, ...time },
+      "release/0.2.0",
+      "0.2.0",
+    );
+    expect(pr?.checks).toBe("passing");
+    expect(time.now()).toBe(2 * POLL_MS);
+  });
+
+  it("sin checks espera un rato a que aparezcan, y después sigue", async () => {
+    const time = clock();
+    const pr = await waitForChecks(
+      { gh: answers(open("none")), io: silent, ...time },
+      "release/0.2.0",
+      "0.2.0",
+    );
+    expect(pr?.checks).toBe("none");
+    expect(time.now()).toBeGreaterThanOrEqual(CHECKS_GRACE_MS);
+  });
+
+  it("devuelve un CI que falló sin esperar más", async () => {
+    const time = clock();
+    const pr = await waitForChecks(
+      { gh: answers(open("failing")), io: silent, ...time },
+      "release/0.2.0",
+      "0.2.0",
+    );
+    expect(pr?.checks).toBe("failing");
+    expect(time.now()).toBe(0);
+  });
+
+  it("se rinde al pasar el límite, y dice cómo seguir", async () => {
+    const time = clock();
+    await expect(
+      waitForChecks(
+        { gh: answers(open("pending")), io: silent, ...time },
+        "release/0.2.0",
+        "0.2.0",
+      ),
+    ).rejects.toThrow(/star release finish 0\.2\.0/);
+    expect(time.now()).toBeGreaterThanOrEqual(WAIT_LIMIT_MS);
+  });
+});
+
 describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
   let home: string;
   const saved: Record<string, string | undefined> = {};
@@ -175,6 +256,7 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
       gh,
       runGate: () => true,
       today: () => "2026-11-08",
+      ...clock(),
       io: { log: () => {}, warn: () => {}, confirm: async () => true },
     };
   }
@@ -303,6 +385,74 @@ describe("prepareRelease y finishRelease con git", { timeout: 60_000 }, () => {
       "CHANGELOG.md",
       "package.json",
     ]);
+  });
+
+  it("con autoMerge, release espera el CI y termina sola", async () => {
+    const { work, origin } = repo();
+    writeFileSync(
+      join(work, "package.json"),
+      `{
+  "name": "app",
+  "version": "0.1.0",
+  "star": { "gate": [], "autoMerge": true }
+}
+`,
+    );
+    git(work, "commit", "--quiet", "-am", "chore: auto merge");
+    git(work, "push", "--quiet", "origin", "develop");
+
+    const states: PullRequest["checks"][] = ["none", "pending", "passing"];
+    const merges: string[] = [];
+    const base = deps(work, () => null, []);
+    const confirms: string[] = [];
+    const auto: ReleaseDeps = {
+      ...base,
+      io: { ...base.io, confirm: async (q) => (confirms.push(q), true) },
+      gh: {
+        ...base.gh,
+        findPr: () => ({ ...merged(), state: "OPEN", checks: states.shift() ?? "passing" }),
+        mergeSquash: (_number, subject) => {
+          merges.push(subject);
+          squash(work, subject);
+        },
+      },
+    };
+
+    await prepareRelease(auto, "minor");
+
+    expect(merges).toEqual(["0.2.0"]);
+    // Se pregunta una sola vez: la de preparar ya decía que se terminaba sola.
+    expect(confirms).toEqual(["¿Preparar la 0.2.0?"]);
+    expect(git(origin, "tag", "--list")).toBe("v0.2.0");
+    expect(git(origin, "log", "-1", "--format=%s", "main")).toBe("0.2.0");
+  });
+
+  it("con autoMerge, un CI que falla no se mergea", async () => {
+    const { work, origin } = repo();
+    writeFileSync(
+      join(work, "package.json"),
+      `{
+  "name": "app",
+  "version": "0.1.0",
+  "star": { "gate": [], "autoMerge": true }
+}
+`,
+    );
+    git(work, "commit", "--quiet", "-am", "chore: auto merge");
+    git(work, "push", "--quiet", "origin", "develop");
+
+    const states: PullRequest["checks"][] = ["pending", "failing"];
+    const base = deps(work, () => null, []);
+    const auto: ReleaseDeps = {
+      ...base,
+      gh: {
+        ...base.gh,
+        findPr: () => ({ ...merged(), state: "OPEN", checks: states.shift() ?? "failing" }),
+      },
+    };
+
+    await expect(prepareRelease(auto, "minor")).rejects.toThrow(/el CI del PR #7 falló/);
+    expect(git(origin, "tag", "--list")).toBe("");
   });
 
   it("finish frena si el CI del PR todavía corre", async () => {
