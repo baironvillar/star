@@ -1,0 +1,93 @@
+name: web-release
+
+# Reutilizable: la release en borrador de una app web, con las notas del
+# changelog y los archivos que la app construyó. Va después de verify.yml:
+#
+#   jobs:
+#     verify:
+#       uses: baironvillar/star/.github/workflows/verify.yml@v0.3.0
+#     build:
+#       needs: verify
+#       ...                                   # la app sube sus archivos con
+#                                             # actions/upload-artifact
+#     release:
+#       needs: [verify, build]
+#       permissions:
+#         contents: write
+#       uses: baironvillar/star/.github/workflows/web-release.yml@v0.3.0
+#       with:
+#         version: ${{ needs.verify.outputs.version }}
+#         assets: web-bundle                  # nombre o patrón de artefactos
+#
+# Construir, la imagen Docker y el despliegue son de la app: acá sólo se arma
+# la release y se revisa que haya quedado bien.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: La versión, sin la v. Sale de verify.yml.
+        type: string
+        required: true
+      assets:
+        description: Nombre o patrón de los artefactos del workflow que van como assets. Vacío, ninguno.
+        type: string
+        default: ""
+
+jobs:
+  release:
+    name: Release en borrador
+    runs-on: ubuntu-latest
+    # Un workflow reutilizable no puede pedir más permisos que los del job que
+    # lo llama: la app tiene que darle `contents: write` a ese job.
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - if: inputs.assets != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ inputs.assets }}
+          path: assets
+          merge-multiple: true
+
+      # Queda en borrador a propósito: publicarla es la decisión de que esta
+      # versión sale, y es un clic, no un efecto colateral de empujar un tag.
+      # `--verify-tag` falla si el tag no existe en GitHub, en vez de crearlo.
+      - name: Crear la release
+        run: |
+          set --
+          if [ -d assets ]; then
+            for f in assets/*; do [ -f "$f" ] && set -- "$@" "$f"; done
+          fi
+          # Una versión con sufijo (0.7.0-beta.1) sale como prerelease.
+          pre=""
+          case "$VERSION" in *-*) pre="--prerelease" ;; esac
+          # shellcheck disable=SC2086
+          gh release create "$TAG" --draft --verify-tag $pre \
+            --title "$VERSION" --notes-file release-notes.md "$@"
+
+      # Lo que se subió es lo que se esperaba: borrador, en el tag correcto y
+      # con todos los archivos. Una subida que falló a medias no lo dice sola.
+      - name: Revisar la release
+        run: |
+          esperados=0
+          if [ -d assets ]; then esperados=$(find assets -maxdepth 1 -type f | wc -l); fi
+          gh release view "$TAG" --json isDraft,tagName,assets \
+            --jq '"\(.isDraft) \(.tagName) \(.assets | length)"' > release.txt
+          read -r borrador tag subidos < release.txt
+          [ "$borrador" = "true" ] || { echo "::error::La release no quedó en borrador."; exit 1; }
+          [ "$tag" = "$TAG" ] || { echo "::error::La release apunta a $tag, no a $TAG."; exit 1; }
+          [ "$subidos" -eq "$esperados" ] || {
+            echo "::error::Se esperaban $esperados assets y la release tiene $subidos."
+            exit 1
+          }
+          echo "Release $TAG en borrador con $subidos asset(s)."

@@ -1,0 +1,99 @@
+name: verify
+
+# Reutilizable: lo que tiene que ser cierto antes de construir la release de un
+# tag, en cualquier app. La app lo llama desde su workflow de release:
+#
+#   jobs:
+#     verify:
+#       uses: baironvillar/star/.github/workflows/verify.yml@v0.3.0
+#
+# La lógica está en `star verify`, no acá: el YAML sólo prepara la máquina. Así
+# la misma regla corre en local, y el workflow sirve igual para una app web que
+# para una de escritorio.
+#
+# Usa el star instalado en la app (`bunx star`), no uno descargado en la
+# versión del workflow: la regla que pasó en local es la que corre acá. `doctor`
+# avisa si la versión de este workflow y la instalada no coinciden.
+
+on:
+  workflow_call:
+    inputs:
+      star:
+        description: Cómo llamar a star. Sólo el propio kit lo cambia.
+        type: string
+        default: bunx star
+      runs-on:
+        description: El runner. Una app de escritorio puede necesitar el de su plataforma.
+        type: string
+        default: ubuntu-latest
+      rust:
+        description: Instala Rust (y en Linux las librerías de Tauri) para una puerta con cargo.
+        type: boolean
+        default: false
+    outputs:
+      version:
+        description: La versión del tag, sin la v (0.3.0).
+        value: ${{ jobs.verify.outputs.version }}
+      prerelease:
+        description: '"true" si la versión tiene sufijo (0.7.0-beta.1) y sale como prerelease.'
+        value: ${{ jobs.verify.outputs.prerelease }}
+      commit:
+        description: El sha del commit etiquetado (no el del objeto del tag anotado).
+        value: ${{ jobs.verify.outputs.commit }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verificar el tag
+    runs-on: ${{ inputs.runs-on }}
+    # bash también en Windows: los pasos usan "$GITHUB_REF_NAME", que en
+    # PowerShell sería una variable vacía.
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      version: ${{ steps.verify.outputs.version }}
+      prerelease: ${{ steps.verify.outputs.prerelease }}
+      commit: ${{ steps.verify.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Sin historia completa no está el commit del tag para leer su asunto.
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - if: inputs.rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - if: inputs.rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      # Compilar el crate de Tauri en Linux, también para `cargo test`, pide
+      # las librerías de WebKit.
+      - if: inputs.rust && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - run: bun install --frozen-lockfile
+
+      # El commit se llama como la versión, el tag coincide con los manifiestos,
+      # hay notas y pasa la puerta. Escribe `version` en GITHUB_OUTPUT.
+      - name: star verify
+        id: verify
+        run: ${{ inputs.star }} verify "$GITHUB_REF_NAME" --notes-file release-notes.md
+
+      # Las notas viajan como artefacto: el job que crea la release no necesita
+      # instalar la app para leer el changelog.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error

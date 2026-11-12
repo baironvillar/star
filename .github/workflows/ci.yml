@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check and test (${{ matrix.os }})
+    # Windows además de Linux: las apps se escriben en Windows, y los
+    # manifiestos llegan con CRLF y BOM. El kit tiene que leerlos igual.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      # Formato, lint y tipos en una sola pasada (Oxfmt, Oxlint y tsgolint).
+      - run: bunx vp check
+
+      - run: bunx vp test run
+
+      # Las plantillas se copian a la app tal cual: sus tests corren con bun,
+      # como los va a correr la app.
+      - run: bun test templates
+
+      # El CLI se usa a sí mismo: los manifiestos del kit tienen que coincidir.
+      - run: bun src/cli.ts version
+
+  conventions:
+    name: Commits and branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      # El kit se revisa con su propia regla. El CLI no importa dependencias, así
+      # que no hace falta `bun install`.
+      - name: Commit messages
+        run: bun src/cli.ts lint commits "$BASE_SHA..$HEAD_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Branch name
+        if: github.event_name == 'pull_request'
+        run: bun src/cli.ts lint branch "$HEAD_REF" --into "$BASE_REF"
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}

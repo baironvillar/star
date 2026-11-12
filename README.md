@@ -1,8 +1,7 @@
 # star
 
-> **Estado: en diseño.** No hay código todavía. Este repositorio por ahora
-> contiene la descripción del proyecto, su alcance y el plan, para discutirlos
-> antes de escribir la primera línea.
+> **Estado: en desarrollo.** Ya funciona el núcleo de versiones (`star version`
+> y `star notes`, paso 1 del [roadmap](ROADMAP.md)). El resto sigue en diseño.
 
 star es la librería: el CLI, los workflows reutilizables, los hooks y las
 plantillas. [liftoff](https://github.com/baironvillar/liftoff) va a ser una
@@ -43,12 +42,12 @@ El diagnóstico completo de qué se lleva y qué se deja está en
 El kit no compila ni reemplaza a las herramientas oficiales. Su valor está en lo
 que pasa **antes** y **después** del build:
 
-| Antes del build                              | El build (no es del kit)                    | Después del build                                   |
-| -------------------------------------------- | ------------------------------------------- | --------------------------------------------------- |
-| Versión única y validada en los manifiestos  | `tauri-action` en una app de escritorio     | Verificar la release en borrador antes de publicarla |
-| Notas obligatorias desde `CHANGELOG.md`      | Docker, `vp build`, etc. en una app web     | `latest.json` completo y firmado (escritorio)       |
-| `vp check` y `vp test` como puerta           |                                             | Relay de crashes y feedback (escritorio)            |
-| Rama, tag y mensaje del commit en regla      |                                             |                                                     |
+| Antes del build                             | El build (no es del kit)                | Después del build                                    |
+| ------------------------------------------- | --------------------------------------- | ---------------------------------------------------- |
+| Versión única y validada en los manifiestos | `tauri-action` en una app de escritorio | Verificar la release en borrador antes de publicarla |
+| Notas obligatorias desde `CHANGELOG.md`     | Docker, `vp build`, etc. en una app web | `latest.json` completo y firmado (escritorio)        |
+| `vp check` y `vp test` como puerta          |                                         | Relay de crashes y feedback (escritorio)             |
+| Rama, tag y mensaje del commit en regla     |                                         |                                                      |
 
 Se divide en dos capas:
 
@@ -74,16 +73,18 @@ Detalle en [`docs/arquitectura.md`](docs/arquitectura.md).
 Cada pieza del kit tiene que servirle a una app real. Si no le sirve a ninguna,
 no se construye.
 
-| App                                                      | Tipo                 | Qué usa                         | Cuándo        |
-| -------------------------------------------------------- | -------------------- | ------------------------------- | ------------- |
-| [flotas](https://github.com/baironvillar/flotas)         | SaaS web (Vite+)     | núcleo + target `web`           | primero       |
-| [Starless](https://github.com/baironvillar/Starless)     | Escritorio (Tauri 2) | núcleo + target `tauri`         | después       |
+| App                                                  | Tipo                 | Qué usa                 | Cuándo  |
+| ---------------------------------------------------- | -------------------- | ----------------------- | ------- |
+| [flotas](https://github.com/baironvillar/flotas)     | SaaS web (Vite+)     | núcleo + target `web`   | primero |
+| [Starless](https://github.com/baironvillar/Starless) | Escritorio (Tauri 2) | núcleo + target `tauri` | después |
 
 ## Cómo se usaría (previsto, no implementado)
 
 ```bash
 bun add -d github:baironvillar/star#v0.1.0
-bunx star init
+bun node_modules/@baironvillar/star/src/cli.ts init hooks    # commit-msg y pre-push
+bun node_modules/@baironvillar/star/src/cli.ts doctor         # qué falta o está mal
+bun node_modules/@baironvillar/star/src/cli.ts init github    # el repo en GitHub, listo para el primer PR
 ```
 
 ```ts
@@ -92,7 +93,7 @@ export default defineConfig({
   run: {
     tasks: {
       verify: ["vp check", "vp test run"],
-      release: { command: "star release", cache: false, dependsOn: ["verify"] },
+      release: { command: "bun node_modules/@baironvillar/star/src/cli.ts release", cache: false },
     },
   },
 });
@@ -105,11 +106,20 @@ on:
     tags: ["v*"]
 jobs:
   verify:
-    uses: baironvillar/star/.github/workflows/verify.yml@v0
-  release:
+    uses: baironvillar/star/.github/workflows/verify.yml@v0.3.0
+  build:
     needs: verify
-    uses: baironvillar/star/.github/workflows/tauri-release.yml@v0
-    secrets: inherit
+    # lo propio de la app: build, imagen Docker; sube sus archivos con
+    # actions/upload-artifact
+  release:
+    needs: [verify, build]
+    permissions:
+      contents: write
+    uses: baironvillar/star/.github/workflows/web-release.yml@v0.3.0
+    with:
+      version: ${{ needs.verify.outputs.version }}
+      assets: web-bundle
+    # una app de escritorio usará tauri-release.yml (fase 2)
 ```
 
 ## Documentos

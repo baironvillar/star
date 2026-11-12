@@ -12,7 +12,8 @@ Mientras el proyecto está en diseño, lo que más sirve es discutir el alcance.
 
 ## Ramas
 
-- `main`: la línea publicada. Sólo recibe `develop`.
+- `main`: la línea publicada. No recibe pull requests: la actualiza
+  `star release finish` con cada versión (decisión 19).
 - `develop`: integración. Todo llega acá por pull request.
 - Todo lo demás: `tipo/descripcion-corta`, en inglés, minúscula y kebab-case,
   cortado desde `develop`. Por ejemplo `docs/scope-updater-backup` o

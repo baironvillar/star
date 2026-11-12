@@ -1,0 +1,23 @@
+# El relay de reportes de {{app}}. Cómo ponerlo en marcha: relay/README.md.
+
+name = "{{app}}-relay"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[vars]
+REPO = "{{repo}}"
+# El nombre corto de la app: va en el User-Agent y en las marcas de cada issue.
+# No se cambia después de los primeros reportes: la agrupación de crashes busca
+# por esas marcas.
+APP = "{{app}}"
+# Reportes por dirección por hora.
+RATE_LIMIT = "10"
+
+# Se crea con `bunx wrangler kv namespace create REPORTS --config relay/wrangler.toml`.
+# Pega acá el id que imprime. No es un secreto: se commitea.
+[[kv_namespaces]]
+binding = "REPORTS"
+id = "REPLACE_WITH_THE_KV_NAMESPACE_ID"
+
+# GITHUB_TOKEN es un secreto y nunca va en este archivo:
+# `bunx wrangler secret put GITHUB_TOKEN --config relay/wrangler.toml`.
