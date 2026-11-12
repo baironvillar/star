@@ -318,6 +318,7 @@ el asunto a su manera.
   y no a `main`, que no sea el PR de una versión (ése lo termina
   `star release finish`, que además etiqueta) y que el título cumpla la
   convención, porque es el asunto del commit.
-- **Squash con el título y la descripción** (decisión 18), aunque el repo no
-  esté configurado así: star le pasa los dos a GitHub.
+- **Squash con el título, el número del PR y la descripción** (decisión 18),
+  como lo deja GitHub al mergear desde la web, aunque el repo no esté
+  configurado así: star le pasa el asunto y el cuerpo.
 - Si estabas en la rama del PR, quedas en la base al día.

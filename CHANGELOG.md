@@ -9,8 +9,8 @@ siguen [SemVer](https://semver.org/lang/es/).
 ### Agregado
 
 - `star pr merge [número]`: espera el CI de un PR (el de la rama actual, si no
-  dices cuál) y lo mergea a la base con squash, con el título como asunto y la
-  descripción como cuerpo. No pregunta: mergear a la base es automático. Rechaza
+  dices cuál) y lo mergea a la base con squash, con el título y el número del
+  PR como asunto (como lo deja GitHub) y la descripción como cuerpo. No pregunta: mergear a la base es automático. Rechaza
   antes de esperar un PR a `main`, el de una versión o un título fuera de la
   convención, y no mergea si el CI falla o hay conflictos.
 

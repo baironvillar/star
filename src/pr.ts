@@ -10,8 +10,8 @@ import type { Git } from "./git.ts";
  * `star pr merge`: espera el CI de un PR y lo mergea a la base (decisión 24).
  *
  * Es lo mismo que hace `star release` con el PR de una versión, para cualquier
- * PR: squash con el título como asunto y la descripción como cuerpo
- * (decisión 18), sólo hacia la base. No pregunta: mergear a la base es parte
+ * PR: squash con el título (y el número del PR) como asunto y la descripción
+ * como cuerpo (decisión 18), sólo hacia la base. No pregunta: mergear a la base es parte
  * de lo automático; lo que se pregunta es lanzar (decisión 23). Corre en la
  * terminal de quien lo llama, así el merge dispara los workflows del push a la
  * base, cosa que un merge hecho con el `GITHUB_TOKEN` no haría.
@@ -56,10 +56,10 @@ export async function mergePr(deps: PrDeps, ref?: string): Promise<void> {
   }
   const route = checkPullRequest(found.head, found.base, config.base);
   if (!route.ok) problems.push(route.reason);
-  const title = checkTitle(found.title);
-  if (!title.ok) {
+  const titleCheck = checkTitle(found.title);
+  if (!titleCheck.ok) {
     problems.push(
-      `el título "${found.title.trim()}" no cumple la convención (${title.reason}), y va a ser el asunto del commit. Cámbialo en GitHub.\n\n${SUBJECT_HELP}`,
+      `el título "${found.title.trim()}" no cumple la convención (${titleCheck.reason}), y va a ser el asunto del commit. Cámbialo en GitHub.\n\n${SUBJECT_HELP}`,
     );
   }
   if (problems.length > 0) fail(`El PR #${found.number} no se puede mergear:`, problems);
@@ -78,8 +78,12 @@ export async function mergePr(deps: PrDeps, ref?: string): Promise<void> {
   if (after.length > 0) fail(`El PR #${pr.number} no se mergeó:`, after);
   if (pr.checks === "none") io.warn(`el PR #${pr.number} no tiene checks: nada probó este cambio.`);
 
-  gh.mergeSquash(pr.number, pr.title.trim(), pr.body);
-  io.log(`✓ PR #${pr.number} mergeado a ${pr.base}: ${pr.title.trim()}`);
+  // Con el número al final, como lo deja GitHub al mergear desde la web: el
+  // historial de la base dice de qué PR viene cada commit.
+  const title = pr.title.trim();
+  const subject = title.endsWith(`(#${pr.number})`) ? title : `${title} (#${pr.number})`;
+  gh.mergeSquash(pr.number, subject, pr.body);
+  io.log(`✓ PR #${pr.number} mergeado a ${pr.base}: ${subject}`);
 
   // Si estabas en esa rama, quedas en la base al día: lo de la rama ya llegó.
   if (git.branch() === pr.head) {
