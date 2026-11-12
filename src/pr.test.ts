@@ -64,7 +64,7 @@ describe("mergePr", () => {
 
     await mergePr(deps);
 
-    expect(merges).toEqual(["#12 feat(pr): merge from star | ## What\n\nAlgo."]);
+    expect(merges).toEqual(["#12 feat(pr): merge from star (#12) | ## What\n\nAlgo."]);
     expect(git.calls).toContain("switchTo develop");
     expect(git.calls).toContain("pullFastForward");
   });
