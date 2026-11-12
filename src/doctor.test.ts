@@ -15,6 +15,7 @@ const gh = (available = true, settings: MergeSettings | null = wanted("develop")
   available: () => available,
   createPr: () => "",
   findPr: () => null,
+  viewPr: () => null,
   mergeSquash: () => {},
   releaseAssets: () => [],
   downloadAsset: () => null,

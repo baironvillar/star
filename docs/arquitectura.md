@@ -115,6 +115,11 @@ construirla y revisarla; sin `autoMerge` queda en borrador, como antes.
 | `"autoMerge": true`                          | esperar el CI, mergear, publicar | preparar y lanzar                    |
 | `"autoMerge": true, "confirmRelease": false` | todo                             | sólo preparar                        |
 
+**Los PR de cada día** se mergean con `star pr merge [número]` (decisión 24):
+espera el CI con la misma espera de `release` y mergea a la base con squash,
+título como asunto y descripción como cuerpo. No pregunta y no depende de
+`autoMerge`: llamarlo ya es pedirlo.
+
 **La puerta** sale de `"star": { "gate": ... }` en el `package.json` de la app.
 Sin configurar, si la app usa Vite+ es `vp check` y `vp test run`. En una app
 con Vite+ conviene apuntarla a una tarea cacheada (`"gate": "vp run verify"`):
