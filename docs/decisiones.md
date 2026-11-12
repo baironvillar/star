@@ -182,3 +182,49 @@ descripción del PR (`PR_TITLE` y `PR_BODY`), tenga los commits que tenga:
   título.
 - `star release finish` no depende de esto: le pasa a GitHub el asunto exacto
   (la versión) y un cuerpo vacío.
+
+## 19. `main` la actualiza star, y el repo sólo permite squash
+
+La decisión 18 dejó bien el squash, pero el merge commit seguía habilitado
+porque `develop` llegaba a `main` por un PR mergeado con merge commit. GitHub
+pone ese método primero en el botón, con su mensaje de siempre
+("Merge pull request #N from…"), y en el primer PR de sme fue el que se ofreció.
+Limitar los métodos por rama exige rulesets, que en un repo privado piden
+GitHub Pro. El detalle está en
+[`diagnostico-arranque-sme.md`](diagnostico-arranque-sme.md).
+
+- **`star release finish` actualiza `main`.** Después de mergear la versión a
+  `develop` y antes del tag, crea el merge commit de `develop` a `main` con la
+  versión como asunto y lo empuja. Las betas no llegan a `main`. Si `main` ya
+  contiene lo de `develop` (un `finish` que se cortó a la mitad), no hace nada.
+- **El repo sólo permite squash.** `star init github` deshabilita el merge
+  commit y el rebase. En un PR, el único botón posible es el correcto.
+- **`main` no recibe pull requests.** `star lint branch --into main` lo rechaza.
+- **El push a `main` lo hace star con `--no-verify`.** El hook `pre-push`
+  existe para que una persona no empuje a `main`; star es el único camino
+  previsto, y el merge commit lo arma él con el asunto exacto. Si el repo tiene
+  protección de rama sobre `main`, el push falla y star lo dice.
+- **El tag sigue sobre el commit de `develop`**, que queda como primer padre
+  del merge en `main`. El canal sale del sufijo de la versión (decisión 16), no
+  de dónde está el commit, así que los workflows no cambian.
+
+## 20. `star init github` arranca el repo completo
+
+Lo de GitHub estaba repartido en piezas que había que conocer: `init hooks`,
+`init github`, el workflow del título y una plantilla de PR que star no
+tenía. `doctor` las detectaba, pero en sme el primer PR salió sin ellas.
+`star init github` hace ahora todo lo que el repo en GitHub necesita, en orden,
+mostrando el plan y preguntando una vez:
+
+1. **Repo vacío:** crea un commit inicial con los archivos del punto 3, crea
+   `main` y la base desde él y los empuja (es el otro push a esas ramas que
+   hace star). Si la rama actual todavía no tiene commits, la apunta al mismo
+   commit, para que el primer PR comparta historia con la base. Si falta sólo
+   una de las dos ramas, la crea desde la otra.
+2. **Rama por defecto: la base.** Es el destino de todo PR, y GitHub lee de
+   ahí la plantilla de PR.
+3. **Archivos:** `.github/workflows/pr-title.yml` (`star lint title`) y
+   `.github/PULL_REQUEST_TEMPLATE.md`. Sólo escribe los que faltan: una
+   plantilla o un workflow que ya existe es de la app (decisión 14). En un repo
+   que ya tenía historia quedan en el árbol, para commitearlos en un PR.
+4. **Ajustes de merge** de la decisión 19, y los vuelve a leer después.
