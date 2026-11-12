@@ -42,7 +42,9 @@ cerrar el paso 9: Starless ya publica con star, pero sólo betas.
 
 Entre medio salieron piezas que pidió el uso real: las betas
 (`star release --beta`, v0.4.0) y `star init github`, que hace que el squash
-de un PR salga de su título y descripción (v0.6.0).
+de un PR salga de su título y descripción (v0.6.0). Desde sme, además arranca
+el repo en GitHub para que el primer PR ya cumpla la convención, y `main` la
+actualiza `star release finish` (decisiones 19 y 20).
 
 ## Fase 3
 

@@ -83,8 +83,8 @@ describe("checkBranch", () => {
 });
 
 describe("checkPullRequest", () => {
-  it("main sólo recibe la base; la base recibe ramas con buen nombre", () => {
-    expect(checkPullRequest("develop", "main", "develop").ok).toBe(true);
+  it("main no recibe PRs (la actualiza release finish); la base, ramas con buen nombre", () => {
+    expect(checkPullRequest("develop", "main", "develop").ok).toBe(false);
     expect(checkPullRequest("feat/x", "main", "develop").ok).toBe(false);
     expect(checkPullRequest("feat/x", "develop", "develop").ok).toBe(true);
     expect(checkPullRequest("wip", "develop", "develop").ok).toBe(false);

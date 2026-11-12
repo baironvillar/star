@@ -6,6 +6,21 @@ siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Cambiado
+
+- `star init github` deja el repo en GitHub listo para el primer PR con un solo
+  comando: en un repo vacío crea el commit inicial y las ramas `main` y base sin
+  saltarse el hook, deja la base como rama por defecto, escribe el workflow que
+  revisa el título y la plantilla de PR, y deja sólo squash, desde el título y
+  la descripción del PR. En sme, el primer PR salió sin nada de eso y el botón
+  de merge ofrecía "Merge pull request #1 from…".
+- `star release finish` lleva cada versión estable a `main` con un merge commit
+  que se llama como ella, antes de crear el tag. `main` ya no recibe pull
+  requests, y `star lint branch --into main` los rechaza.
+- `star doctor` revisa que exista `main`, que el repo sólo permita squash, que
+  la base sea la rama por defecto y que haya plantilla de PR; todo lo que falte
+  apunta a `bunx star init github`.
+
 ## [0.6.0] - 2026-11-11
 
 ### Agregado

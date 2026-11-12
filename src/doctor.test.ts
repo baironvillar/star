@@ -8,10 +8,10 @@ import { diagnose, type Finding, releaseTask } from "./doctor.ts";
 import type { Gh } from "./gh.ts";
 import type { Git } from "./git.ts";
 import { hookScript } from "./hooks.ts";
-import { type MergeSettings, WANTED } from "./merge-settings.ts";
+import { type MergeSettings, wanted } from "./merge-settings.ts";
 import { fakeGit } from "./testing/fake-git.ts";
 
-const gh = (available = true, settings: MergeSettings | null = WANTED): Gh => ({
+const gh = (available = true, settings: MergeSettings | null = wanted("develop")): Gh => ({
   available: () => available,
   createPr: () => "",
   findPr: () => null,
@@ -57,6 +57,7 @@ function app(files: Record<string, string> = {}): string {
       'export default { run: { tasks: { release: { command: "bunx star release", cache: false } } } };\n',
     ".github/workflows/ci.yml":
       'steps:\n  - run: bunx star lint commits "$A..$B"\n  - run: bunx star lint title "$T"\n',
+    ".github/PULL_REQUEST_TEMPLATE.md": "## What\n",
     ...files,
   };
   for (const [path, text] of Object.entries(all)) {
@@ -138,6 +139,7 @@ describe("diagnose", () => {
       "warn hooks → bunx star init hooks",
       "warn ci → un workflow que corra la puerta y bunx star lint commits, branch y title",
       "warn github → ",
+      "warn github → bunx star init github",
     ]);
   });
 
@@ -181,16 +183,28 @@ describe("diagnose", () => {
     );
   });
 
+  it("un origin sin main es un error: release finish lleva ahí cada versión", () => {
+    const git = healthyGit({ remoteBranchExists: (name) => name !== "main" });
+    const found = diagnose({ root: app(), git, gh: gh() }).filter((f) => f.level === "error");
+    expect(found.map((f) => `${f.message} → ${f.fix}`)).toEqual([
+      "origin no tiene main, donde llega cada versión → bunx star init github",
+    ]);
+  });
+
   it("los ajustes de merge que GitHub trae por defecto: avisa y propone star init github", () => {
-    const defaults = {
+    const defaults: MergeSettings = {
       allowSquash: true,
       squashTitle: "COMMIT_OR_PR_TITLE",
       squashMessage: "COMMIT_MESSAGES",
+      allowMergeCommit: true,
+      allowRebase: true,
+      defaultBranch: "main",
     };
     const findings = diagnose({ root: app(), git: healthyGit(), gh: gh(true, defaults) });
     const merge = findings.filter((f) => f.area === "github" && f.level !== "ok");
     expect(merge).toHaveLength(1);
-    expect(merge[0]?.message).toMatch(/varios commits no sale solo/);
+    expect(merge[0]?.message).toMatch(/no está como lo pide star/);
+    expect(merge[0]?.message).toMatch(/merge commit: habilitado → deshabilitado/);
     expect(merge[0]?.message).toMatch(/asunto del squash: .* → el título del PR/);
     expect(merge[0]?.fix).toBe("bunx star init github");
   });

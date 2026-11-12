@@ -16,7 +16,7 @@
  *   star init changelog             crea un CHANGELOG.md vacío, si no hay uno
  *   star init updater               llave del updater de Tauri: respaldo, secreto y pública
  *   star init relay                 copia el relay de reportes (un Worker) a relay/
- *   star init github                el squash de un PR sale de su título y descripción
+ *   star init github                arranca el repo en GitHub: ramas, archivos y sólo squash
  *   star hook <nombre> [args]       lo que corre un hook de git (no se llama a mano)
  *   star lint commits [rango]       revisa los mensajes de commit (CI)
  *   star lint branch <rama>         revisa el nombre de una rama (CI)
@@ -42,7 +42,7 @@ import {
   SUBJECT_HELP,
   subjectOf,
 } from "./conventions.ts";
-import { configureMerge } from "./merge-settings.ts";
+import { applyGithub, describePlan, planGithub } from "./github-init.ts";
 import { StarError } from "./errors.ts";
 import { ghIn } from "./gh.ts";
 import { diagnose } from "./doctor.ts";
@@ -110,9 +110,12 @@ Uso:
                                --import <ruta> trae una llave que ya existía
   star init relay              copia a relay/ el Worker que convierte reportes
                                en issues. Con --name <nombre> para el nombre
-  star init github             ajusta el repo en GitHub para que el squash de un
-                               PR salga de su título y su descripción, tenga
-                               uno o varios commits. Pregunta antes
+  star init github             deja el repo en GitHub listo para el primer PR:
+                               crea main y la base si faltan (o el commit
+                               inicial, en un repo vacío), escribe el workflow
+                               del título y la plantilla de PR, la base como
+                               rama por defecto y sólo squash, desde el título
+                               y la descripción del PR. Pregunta antes
   star lint commits [rango]    revisa los mensajes de base..head, o de un commit
   star lint branch <rama>      revisa el nombre de una rama; con --into <base>,
                                también hacia dónde va el pull request
@@ -462,40 +465,47 @@ function initRelay(root: string, nameArg: string | undefined) {
 }
 
 /**
- * Los ajustes de merge del repo en GitHub. Es un cambio fuera de la app, en un
- * repo que puede ser de más gente: siempre se muestra y se pregunta.
+ * El repo en GitHub, listo para el primer PR (decisión 20). Cambia cosas fuera
+ * de la app, en un repo que puede ser de más gente: muestra el plan entero y
+ * pregunta una vez.
  */
 async function initGithub(root: string, yes: boolean) {
   const gh = ghIn(root);
+  const git = gitIn(root);
   if (!gh.available())
     throw new StarError("gh no está instalado o no tiene sesión: gh auth login.");
-  const result = await configureMerge(gh, async (changes) => {
-    console.log("GitHub arma hoy el squash de un PR así, y star lo cambia:\n");
-    for (const change of changes) console.log(`  ${change.description}`);
+  if (!git.fetch())
+    throw new StarError("no se pudo traer lo de origin. ¿Hay red y un remoto origin?");
+  const { base } = readConfig(root);
+  const plan = planGithub(root, git, gh, base);
+  const lines = describePlan(plan, base);
+  if (lines.length === 0) {
+    console.log("✓ El repo en GitHub ya está como lo pide star.");
+    return;
+  }
+  console.log("Para que el primer PR ya cumpla la convención, star va a:\n");
+  for (const line of lines) console.log(`  ${line}`);
+  console.log(
+    [
+      "",
+      `${base} recibe todo por PR, y el squash sale del título y la descripción del PR,`,
+      "que la CI revisa con `star lint title`. main la actualiza `star release finish`",
+      "con cada versión, así que el repo no necesita merge commit ni rebase.",
+      "",
+    ].join("\n"),
+  );
+  if (!(await goAhead("¿Seguir?", yes))) return;
+  const result = await applyGithub(plan, root, git, gh, base);
+  console.log("\n✓ El repo en GitHub quedó listo.");
+  if (result.uncommitted.length > 0) {
     console.log(
-      [
-        "",
-        "Con lo de GitHub por defecto, el mensaje sale del commit sólo si el PR tiene",
-        "uno. Con más, el asunto es el título del PR y el cuerpo la lista de commits,",
-        "y hay que escribirlo a mano al mergear. Así sale siempre del título y la",
-        "descripción del PR, que la CI revisa con `star lint title`.",
-        "",
-      ].join("\n"),
+      `\nQuedaron sin commitear: ${result.uncommitted.join(", ")}. Súbelos en un PR a ${base}:\n\n  git switch -c ci/star-github\n`,
     );
-    return goAhead("¿Cambiar los ajustes del repo en GitHub?", yes);
-  });
-  switch (result.action) {
-    case "unreadable":
-      throw new StarError(
-        "no se pudieron leer los ajustes del repo. Hace falta un origin en GitHub y permiso de admin.",
-      );
-    case "ready":
-      console.log("✓ El squash ya sale del título y la descripción del PR.");
-      return;
-    case "declined":
-      return;
-    case "applied":
-      console.log("\n✓ El squash de cada PR sale ahora de su título y su descripción.");
+  }
+  if (result.onProtected) {
+    console.log(
+      `\nEstás en ${result.onProtected}, y ahí no se commitea. Lo que tengas en el stage viaja contigo a una rama nueva:\n\n  git switch -c feat/descripcion-corta\n`,
+    );
   }
 }
 

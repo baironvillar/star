@@ -7,6 +7,7 @@ import type { Gh } from "./gh.ts";
 import type { Git } from "./git.ts";
 import { HOOK_NAMES, HOOKS_DIR, inspectHooks } from "./hooks.ts";
 import { mergeChanges } from "./merge-settings.ts";
+import { MAIN } from "./release.ts";
 import { inspectUpdater, planUpdater, PRIVATE_SECRET } from "./updater-init.ts";
 import { currentVersion, disagreements, inspect } from "./version.ts";
 
@@ -253,7 +254,7 @@ function ci(root: string): Finding[] {
       warn(
         "ci",
         "la CI no revisa el título del PR, que es el asunto del squash",
-        'bunx star lint title "$PR_TITLE" en un workflow con pull_request: types [opened, edited, synchronize, reopened]',
+        "bunx star init github",
       ),
     );
   }
@@ -301,7 +302,22 @@ function remote(git: Git, gh: Gh, root: string): Finding[] {
   } else {
     const { base } = readConfig(root);
     if (git.remoteBranchExists(base) === false) {
-      findings.push(error("github", `origin no tiene la rama ${base}, de donde sale cada versión`));
+      findings.push(
+        error(
+          "github",
+          `origin no tiene la rama ${base}, de donde sale cada versión`,
+          "bunx star init github",
+        ),
+      );
+    }
+    if (git.remoteBranchExists(MAIN) === false) {
+      findings.push(
+        error(
+          "github",
+          `origin no tiene ${MAIN}, donde llega cada versión`,
+          "bunx star init github",
+        ),
+      );
     }
   }
   if (!gh.available()) {
@@ -315,16 +331,26 @@ function remote(git: Git, gh: Gh, root: string): Finding[] {
     return findings;
   }
   findings.push(ok("github", "gh tiene sesión"));
-  if (git.getConfig("remote.origin.url") !== null) findings.push(...mergeSettings(gh));
+  if (git.getConfig("remote.origin.url") !== null) {
+    findings.push(...mergeSettings(gh, readConfig(root).base));
+  }
+  if (!existsSync(join(root, ".github", "PULL_REQUEST_TEMPLATE.md"))) {
+    findings.push(
+      warn(
+        "github",
+        "no hay plantilla de PR: la descripción es el cuerpo del commit en la base",
+        "bunx star init github",
+      ),
+    );
+  }
   return findings;
 }
 
 /**
- * Cómo arma GitHub el squash. Con lo que trae por defecto, el mensaje sale del
- * commit sólo si el PR tiene uno; con más, hay que escribirlo a mano al
- * mergear. Ver la decisión 18.
+ * Los ajustes de merge del repo (decisiones 18 y 19): sólo squash, desde el
+ * título y la descripción del PR, y la base como rama por defecto.
  */
-function mergeSettings(gh: Gh): Finding[] {
+function mergeSettings(gh: Gh, base: string): Finding[] {
   const settings = gh.mergeSettings();
   if (!settings) {
     return [
@@ -334,14 +360,16 @@ function mergeSettings(gh: Gh): Finding[] {
       ),
     ];
   }
-  const changes = mergeChanges(settings);
+  const changes = mergeChanges(settings, base);
   if (changes.length === 0) {
-    return [ok("github", "el squash sale del título y la descripción del PR")];
+    return [
+      ok("github", `sólo squash, desde el título y la descripción del PR, y ${base} por defecto`),
+    ];
   }
   return [
     warn(
       "github",
-      `el squash de un PR con varios commits no sale solo: ${changes.map((c) => c.description).join("; ")}`,
+      `el repo no está como lo pide star: ${changes.map((c) => c.description).join("; ")}`,
       "bunx star init github",
     ),
   ];
