@@ -30,3 +30,4 @@ jobs:
     uses: ./.github/workflows/web-release.yml
     with:
       version: ${{ needs.verify.outputs.version }}
+      publish: ${{ needs.verify.outputs.publish }}

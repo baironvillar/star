@@ -17,6 +17,7 @@ name: tauri-release
 #       with:
 #         version: ${{ needs.verify.outputs.version }}
 #         platforms: windows,linux
+#         publish: ${{ needs.verify.outputs.publish }}
 #       secrets:
 #         TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 #         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -63,6 +64,10 @@ on:
         description: Cómo llamar a star. Sólo el propio kit lo cambia.
         type: string
         default: bunx star
+      publish:
+        description: '"true" publica la release si latest.json pasa la revisión. Sale de verify.yml (autoMerge); si no, queda en borrador.'
+        type: string
+        default: "false"
     secrets:
       TAURI_SIGNING_PRIVATE_KEY:
         description: La llave privada del updater. Sin ella, no hay latest.json que la app acepte.
@@ -265,9 +270,23 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      # La release queda en borrador, así que este es el último paso que la
-      # puede frenar: cada plataforma en latest.json, apuntando a un archivo de
-      # la release, con la firma de su `.sig` y las notas del CHANGELOG.
+      # El último paso que la puede frenar antes de publicarla: cada
+      # plataforma en latest.json, apuntando a un archivo de la release, con la
+      # firma de su `.sig` y las notas del CHANGELOG.
       - run: ${{ inputs.star }} release check "$GITHUB_REF_NAME" --platforms "$PLATFORMS"
         env:
           PLATFORMS: ${{ inputs.platforms }}
+
+      # Con autoMerge (decisión 23) se publica sola: es cuando las apps
+      # instaladas la ven. Sin autoMerge queda en borrador, y se publica a mano.
+      - name: Publicar la release
+        if: inputs.publish == 'true'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release edit "$TAG" --draft=false
+          [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "false" ] || {
+            echo "::error::La release $TAG sigue en borrador."
+            exit 1
+          }
+          echo "Release $TAG publicada."

@@ -93,9 +93,7 @@ que el kit cobre todos esos chequeos sin que cada app los copie.
 Para discutir. Cuando se decida una, se mueve a [`decisiones.md`](decisiones.md).
 
 1. ~~Respaldo de la llave del updater.~~ Decidido: ver la decisión 17.
-2. **Release en borrador o publicada.** Starless deja la release en borrador y
-   se publica a mano. ¿El kit agrega un `star publish` que verifica y la saca
-   de borrador, o se sigue publicando a mano?
+2. ~~Release en borrador o publicada.~~ Decidido: ver la decisión 23.
 3. **Convenciones configurables.** ¿Los tipos de commit, el largo máximo y el
    formato de las ramas se pueden cambiar por app, o son fijos?
 4. **Monorepos con más de una app publicable.** flotas publica API y web juntas

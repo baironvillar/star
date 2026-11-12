@@ -97,10 +97,23 @@ Ver la decisión 16.
 
 **Con `"star": { "autoMerge": true }`** las dos fases corren seguidas: después
 de abrir el PR, `star release` le pregunta a GitHub por el CI cada 15 segundos
-y, cuando pasa, hace el `finish` sin volver a preguntar (la pregunta de
+y, cuando pasa, mergea el PR a la base sin volver a preguntar (la pregunta de
 preparar ya lo decía). Si el CI falla, se para sin mergear; si sigue corriendo
 después de 30 minutos, o se corta con Ctrl+C, `star release finish` retoma, y
 con `autoMerge` también espera en vez de fallar. Ver la decisión 22.
+
+**Lanzar se pregunta** (decisión 23). Con la versión ya en la base, antes de
+llevarla a `main` y empujar el tag, star pregunta "¿Lanzar la x.y.z?". Con un
+no, la versión queda en la base y `star release finish x.y.z` la lanza más
+tarde. Con `"confirmRelease": false` no pregunta: es 100% automático. Con
+`autoMerge`, la release se publica sola cuando el workflow termina de
+construirla y revisarla; sin `autoMerge` queda en borrador, como antes.
+
+| `package.json` de la app                     | Qué hace solo                    | Qué pregunta                         |
+| -------------------------------------------- | -------------------------------- | ------------------------------------ |
+| nada                                         | nada                             | preparar y terminar; publicar a mano |
+| `"autoMerge": true`                          | esperar el CI, mergear, publicar | preparar y lanzar                    |
+| `"autoMerge": true, "confirmRelease": false` | todo                             | sólo preparar                        |
 
 **La puerta** sale de `"star": { "gate": ... }` en el `package.json` de la app.
 Sin configurar, si la app usa Vite+ es `vp check` y `vp test run`. En una app
@@ -201,7 +214,8 @@ tag v* ──► verify.yml ──► web-release.yml    (app web: + jobs propio
      firma, sube instaladores y `.sig`, y agrega su plataforma a `latest.json`.
   3. `check` corre `star release check`: cada plataforma pedida está en
      `latest.json`, apunta a un archivo de la release, su firma es la del `.sig`
-     y las notas son las del CHANGELOG.
+     y las notas son las del CHANGELOG. Con `publish` (que sale de `autoMerge`),
+     después la publica.
 
   Una beta en Windows le pasa a Tauri `bundle.windows.wix.version` con la beta
   como cuarto campo (`0.7.0-beta.1` → `0.7.0.1`), porque WiX sólo acepta
@@ -214,8 +228,8 @@ tag v* ──► verify.yml ──► web-release.yml    (app web: + jobs propio
 
 - **`web-release.yml`:** crea la release en borrador con las notas y los assets
   que la app subió como artefactos del workflow, y revisa que haya quedado en
-  borrador, en el tag correcto y con todos los archivos. No hace checkout ni
-  instala nada: sólo llama a `gh`.
+  borrador, en el tag correcto y con todos los archivos. Con `publish`, después
+  la publica. No hace checkout ni instala nada: sólo llama a `gh`.
 
 La lógica vive en el CLI, no en el YAML: los workflows llaman a `star verify`
 y similares. Así el YAML queda delgado, sirve igual en Windows y Linux, y la

@@ -40,6 +40,9 @@ on:
       commit:
         description: El sha del commit etiquetado (no el del objeto del tag anotado).
         value: ${{ jobs.verify.outputs.commit }}
+      publish:
+        description: '"true" si la app usa autoMerge y la release sale publicada, no en borrador.'
+        value: ${{ jobs.verify.outputs.publish }}
 
 permissions:
   contents: read
@@ -57,6 +60,7 @@ jobs:
       version: ${{ steps.verify.outputs.version }}
       prerelease: ${{ steps.verify.outputs.prerelease }}
       commit: ${{ steps.verify.outputs.commit }}
+      publish: ${{ steps.verify.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
         with:
